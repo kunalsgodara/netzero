@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from "react";
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Activity, Filter, Edit3, Trash2, Zap } from "lucide-react";
-import Select from "@/components/ui/Select";
+import { Plus, Activity, Filter, Edit3, Trash2, Zap, ChevronLeft, ChevronRight } from "lucide-react";
+import CustomSelect from "@/components/ui/CustomSelect";
+import { useToast, ToastContainer } from "@/components/ui/Toast";
 
 const db = globalThis.__B44_DB__
 
@@ -24,66 +24,84 @@ export default function Emissions() {
   const [scopeFilter, setScopeFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [form, setForm] = useState(EMPTY_FORM);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const { toasts, toast, removeToast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: rawFactors = [], isLoading: isLoadingFactors } = useQuery({
+  const { data: rawFactors = [] } = useQuery({
     queryKey: ["emission_factors"],
     queryFn: () => fetch("/api/v1/emission-factors").then(r => r.json()),
   });
 
-  // Dynamically build the nested taxonomy from the flat DB rows
-  // The DB stores scopes as "Scope 1", "Scope 2", "Scope 3",
-  // but the form uses snake_case keys: "scope_1", "scope_2", "scope_3"
   const EMISSION_TAXONOMY = React.useMemo(() => {
     const taxonomy = {};
     rawFactors.forEach(f => {
-      // Normalize: "Scope 1" -> "scope_1", "Scope 3" -> "scope_3" etc.
       const scopeKey = f.scope.toLowerCase().replace(/ /g, "_");
       if (!taxonomy[scopeKey]) {
-        taxonomy[scopeKey] = {
-          label: f.scope,
-          categories: {}
-        };
+        taxonomy[scopeKey] = { label: f.scope, categories: {} };
       }
       if (!taxonomy[scopeKey].categories[f.category]) {
-        taxonomy[scopeKey].categories[f.category] = {
-          description: "",
-          sources: {}
-        };
+        taxonomy[scopeKey].categories[f.category] = { description: "", sources: {} };
       }
       taxonomy[scopeKey].categories[f.category].sources[f.source] = {
-        unit: f.unit,
-        ef: f.factor,
-        source_dataset: f.source_dataset
+        unit: f.unit, ef: f.factor, source_dataset: f.source_dataset
       };
     });
     return taxonomy;
   }, [rawFactors]);
 
-  const { data: activities = [], isLoading } = useQuery({
-    queryKey: ["emissions"],
-    queryFn: () => db.entities.EmissionActivity.list("-created_date", 500),
+  const { data: activitiesData } = useQuery({
+    queryKey: ["emissions", currentPage, scopeFilter, categoryFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        page_size: "5",
+        order_by: "-created_date",
+      });
+      if (scopeFilter !== "all") params.set("scope", scopeFilter);
+      if (categoryFilter !== "all") params.set("category", categoryFilter);
+      
+      const res = await fetch(`/api/v1/emission-activities?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
+      });
+      return res.json();
+    },
   });
+  
+  const activities = activitiesData?.items || [];
+  const pagination = {
+    page: activitiesData?.page || 1,
+    total: activitiesData?.total || 0,
+    totalPages: activitiesData?.total_pages || 1,
+    hasNext: activitiesData?.has_next || false,
+    hasPrev: activitiesData?.has_prev || false,
+  };
 
   const createMutation = useMutation({
     mutationFn: (data) => db.entities.EmissionActivity.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["emissions"] }); setShowForm(false); resetForm(); },
-    onError: (err) => alert(`Failed to save: ${err.message}`),
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["emissions"] }); 
+      setShowForm(false); 
+      resetForm(); 
+      setCurrentPage(1);
+      toast("Activity saved successfully", "success"); 
+    },
+    onError: (err) => toast(`Failed to save: ${err.message}`, "error"),
   });
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => db.entities.EmissionActivity.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["emissions"] }); setShowForm(false); resetForm(); },
-    onError: (err) => alert(`Failed to save: ${err.message}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["emissions"] }); setShowForm(false); resetForm(); toast("Activity updated successfully", "success"); },
+    onError: (err) => toast(`Failed to save: ${err.message}`, "error"),
   });
   const deleteMutation = useMutation({
     mutationFn: (id) => db.entities.EmissionActivity.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["emissions"] }),
-    onError: (err) => alert(`Failed to delete: ${err.message}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["emissions"] }); toast("Activity deleted", "warning"); },
+    onError: (err) => toast(`Failed to delete: ${err.message}`, "error"),
   });
 
   const resetForm = () => { setForm(EMPTY_FORM); setEditing(null); };
 
-  // ─── Cascading derived options ──────────────────────────────────
   const categoryOptions = useMemo(() => {
     if (!form.scope || !EMISSION_TAXONOMY[form.scope]) return [];
     return Object.keys(EMISSION_TAXONOMY[form.scope].categories);
@@ -100,16 +118,18 @@ export default function Emissions() {
     return EMISSION_TAXONOMY[form.scope]?.categories?.[form.category]?.description || "";
   }, [form.scope, form.category, EMISSION_TAXONOMY]);
 
-  // ─── Cascading change handlers ──────────────────────────────────
   const handleScopeChange = (scope) => {
+    clearFieldError("scope");
     setForm({ ...form, scope, category: "", source: "", unit: "", emission_factor: "", co2e_kg: "" });
   };
 
   const handleCategoryChange = (category) => {
+    clearFieldError("category");
     setForm({ ...form, category, source: "", unit: "", emission_factor: "", co2e_kg: "" });
   };
 
   const handleSourceChange = (source) => {
+    clearFieldError("source");
     const sourceData = EMISSION_TAXONOMY[form.scope]?.categories?.[form.category]?.sources?.[source];
     if (sourceData) {
       const ef = sourceData.ef;
@@ -128,8 +148,23 @@ export default function Emissions() {
     setForm({ ...form, quantity, co2e_kg: co2e });
   };
 
+  const clearFieldError = (field) => setFieldErrors(p => ({ ...p, [field]: false }));
+
   const handleSave = (e) => {
     e.preventDefault();
+    const errs = {};
+    if (!form.activity_name.trim()) errs.activity_name = true;
+    if (!form.activity_date) errs.activity_date = true;
+    if (!form.scope) errs.scope = true;
+    if (!form.category) errs.category = true;
+    if (!form.source) errs.source = true;
+    if (!form.quantity || parseFloat(form.quantity) <= 0) errs.quantity = true;
+    if (Object.keys(errs).length) {
+      setFieldErrors(errs);
+      toast("Please fill in all required fields", "error");
+      return;
+    }
+    setFieldErrors({});
     const data = {
       ...form,
       activity_date: form.activity_date || null,
@@ -153,29 +188,24 @@ export default function Emissions() {
     setShowForm(true);
   };
 
-  // ─── Filtering ──────────────────────────────────────────────────
-  const filtered = activities.filter((a) => {
-    return (scopeFilter === "all" || a.scope === scopeFilter) &&
-           (categoryFilter === "all" || a.category === categoryFilter);
-  });
-
-  const totalTCO2e = filtered.reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
+  const totalTCO2e = activities.reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
 
   const filterCategoryOptions = useMemo(() => {
     if (scopeFilter === "all") return [];
     return Object.keys(EMISSION_TAXONOMY[scopeFilter]?.categories || {});
   }, [scopeFilter, EMISSION_TAXONOMY]);
 
-  // ─── Computed CO₂e display for form ─────────────────────────────
   const calculatedCO2e = parseFloat(form.co2e_kg) || 0;
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
-      {/* Header */}
+    <div className="h-screen flex flex-col">
+      <div className="flex-1 overflow-auto">
+        <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
+          <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-            <Activity className="w-5 h-5 text-emerald-600" />
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Activity className="w-5 h-5 text-primary" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">Emission Activities</h1>
@@ -187,62 +217,65 @@ export default function Emissions() {
         </button>
       </div>
 
-      {/* ─── Form with Cascading Dropdowns ───────────────────────── */}
       {showForm && (
         <div className="bg-card border border-border rounded-xl p-6">
           <h3 className="text-base font-semibold text-foreground mb-4">{editing ? "Edit Activity" : "New Activity"}</h3>
           <form onSubmit={handleSave} className="space-y-5">
-            {/* Row 1: Name & Date */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Activity Name *</label>
-                <input value={form.activity_name} onChange={(e) => setForm({...form, activity_name: e.target.value})}
-                  className="w-full mt-1 px-3 py-2 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none" required placeholder="e.g. Office Heating" />
+                <input value={form.activity_name} onChange={(e) => { setForm({...form, activity_name: e.target.value}); clearFieldError("activity_name"); }}
+                  className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none ${fieldErrors.activity_name ? "border-red-400 bg-red-50/30" : "border-border"}`} placeholder="e.g. Office Heating" />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Activity Date *</label>
-                <input type="date" value={form.activity_date} onChange={(e) => setForm({...form, activity_date: e.target.value})}
+                <input type="date" value={form.activity_date} onChange={(e) => { setForm({...form, activity_date: e.target.value}); clearFieldError("activity_date"); }}
                   max={new Date().toISOString().split("T")[0]}
-                  className="w-full mt-1 px-3 py-2 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none" required />
+                  className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none ${fieldErrors.activity_date ? "border-red-400 bg-red-50/30" : "border-border"}`} />
               </div>
             </div>
 
-            {/* Row 2: Scope → Category (cascading) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Scope *</label>
-                <Select value={form.scope} onChange={(e) => handleScopeChange(e.target.value)}
-                  className="mt-1">
-                  <option value="">Select scope...</option>
-                  {Object.entries(EMISSION_TAXONOMY).map(([key, val]) => (
-                    <option key={key} value={key}>{val.label}</option>
-                  ))}
-                </Select>
+                <CustomSelect
+                  className="mt-1"
+                  value={form.scope}
+                  onChange={(val) => handleScopeChange(val)}
+                  placeholder="Select scope..."
+                  options={Object.entries(EMISSION_TAXONOMY).map(([key, val]) => ({ value: key, label: val.label }))}
+                  hasError={!!fieldErrors.scope}
+                />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Category *</label>
-                <Select value={form.category} onChange={(e) => handleCategoryChange(e.target.value)}
+                <CustomSelect
+                  className="mt-1"
+                  value={form.category}
+                  onChange={(val) => handleCategoryChange(val)}
                   disabled={!form.scope}
-                  className="mt-1">
-                  <option value="">{form.scope ? "Select category..." : "Select scope first"}</option>
-                  {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
-                </Select>
+                  placeholder={form.scope ? "Select category..." : "Select scope first"}
+                  options={categoryOptions.map(c => ({ value: c, label: c }))}
+                  hasError={!!fieldErrors.category}
+                />
                 {categoryDescription && (
                   <p className="text-[10px] text-muted-foreground mt-1 italic">{categoryDescription}</p>
                 )}
               </div>
             </div>
 
-            {/* Row 3: Source → Unit (auto-set) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Source *</label>
-                <Select value={form.source} onChange={(e) => handleSourceChange(e.target.value)}
+                <CustomSelect
+                  className="mt-1"
+                  value={form.source}
+                  onChange={(val) => handleSourceChange(val)}
                   disabled={!form.category}
-                  className="mt-1">
-                  <option value="">{form.category ? "Select source..." : "Select category first"}</option>
-                  {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                </Select>
+                  placeholder={form.category ? "Select source..." : "Select category first"}
+                  options={sourceOptions.map(s => ({ value: s, label: s }))}
+                  hasError={!!fieldErrors.source}
+                />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Unit</label>
@@ -255,12 +288,11 @@ export default function Emissions() {
               </div>
             </div>
 
-            {/* Row 4: Quantity → Emission Factor → Calculated CO₂e */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:items-end">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Quantity *</label>
-                <input type="number" step="any" value={form.quantity} onChange={(e) => handleQuantityChange(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none" required
+                <input type="number" step="any" value={form.quantity} onChange={(e) => { handleQuantityChange(e.target.value); clearFieldError("quantity"); }}
+                  className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none ${fieldErrors.quantity ? "border-red-400 bg-red-50/30" : "border-border"}`}
                   placeholder={form.unit ? `Enter amount in ${form.unit}` : "Enter quantity"} />
               </div>
               <div>
@@ -278,7 +310,6 @@ export default function Emissions() {
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex justify-end gap-2 pt-2 border-t border-border">
               <button type="button" onClick={() => { setShowForm(false); resetForm(); }} className="px-4 py-2 border border-border rounded-lg text-sm hover:bg-muted transition-colors">Cancel</button>
               <button type="submit" disabled={!form.scope || !form.category || !form.source} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Save Activity</button>
@@ -287,72 +318,118 @@ export default function Emissions() {
         </div>
       )}
 
-      {/* ─── KPI Cards ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Activities</p>
-          <p className="text-2xl font-bold text-foreground mt-1">{filtered.length}</p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Total Emissions</p>
-          <p className="text-2xl font-bold text-foreground mt-1">{totalTCO2e.toFixed(2)} <span className="text-sm font-normal">tCO₂e</span></p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Avg per Activity</p>
-          <p className="text-2xl font-bold text-foreground mt-1">{filtered.length ? ((totalTCO2e / filtered.length) * 1000).toFixed(0) : 0} <span className="text-sm font-normal">kgCO₂e</span></p>
-        </div>
-      </div>
+      {!showForm && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-card border border-border rounded-lg p-4">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Activities</p>
+              <p className="text-2xl font-bold text-foreground mt-1">{pagination.total}</p>
+            </div>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Total Emissions</p>
+              <p className="text-2xl font-bold text-foreground mt-1">{totalTCO2e.toFixed(2)} <span className="text-sm font-normal">tCO₂e</span></p>
+            </div>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Avg per Activity</p>
+              <p className="text-2xl font-bold text-foreground mt-1">{pagination.total ? ((totalTCO2e / pagination.total) * 1000).toFixed(0) : 0} <span className="text-sm font-normal">kgCO₂e</span></p>
+            </div>
+          </div>
 
-      {/* ─── Filters ─────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Filter className="w-4 h-4 text-muted-foreground" />
-        <Select value={scopeFilter} onChange={(e) => { setScopeFilter(e.target.value); setCategoryFilter("all"); }} className="h-8 text-xs w-36">
-          <option value="all">All Scopes</option>
-          {Object.entries(EMISSION_TAXONOMY).map(([key, val]) => (
-            <option key={key} value={key}>{val.label}</option>
-          ))}
-        </Select>
-        {filterCategoryOptions.length > 0 && (
-          <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="h-8 text-xs w-44">
-            <option value="all">All Categories</option>
-            {filterCategoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
-          </Select>
-        )}
-      </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <div className="w-36">
+              <CustomSelect
+                value={scopeFilter}
+                onChange={(val) => { setScopeFilter(val); setCategoryFilter("all"); setCurrentPage(1); }}
+                options={[
+                  { value: "all", label: "All Scopes" },
+                  ...Object.entries(EMISSION_TAXONOMY).map(([key, val]) => ({ value: key, label: val.label }))
+                ]}
+              />
+            </div>
+            {filterCategoryOptions.length > 0 && (
+              <div className="w-44">
+                <CustomSelect
+                  value={categoryFilter}
+                  onChange={(val) => { setCategoryFilter(val); setCurrentPage(1); }}
+                  options={[
+                    { value: "all", label: "All Categories" },
+                    ...filterCategoryOptions.map(c => ({ value: c, label: c }))
+                  ]}
+                />
+              </div>
+            )}
+          </div>
 
-      {/* ─── Data Table ──────────────────────────────────────────── */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <table className="w-full text-xs">
-          <thead className="bg-muted/50"><tr>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Activity</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Date</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Scope</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Category</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Source</th>
-            <th className="text-right px-4 py-3 font-medium text-muted-foreground">Quantity</th>
-            <th className="text-right px-4 py-3 font-medium text-muted-foreground">CO₂e (kg)</th>
-            <th className="text-right px-4 py-3 font-medium text-muted-foreground w-20">Actions</th>
-          </tr></thead>
-          <tbody className="divide-y divide-border">
-            {filtered.map(a => (
-              <tr key={a.id} className="hover:bg-muted/30 transition-colors">
-                <td className="px-4 py-3 font-medium text-foreground">{a.activity_name}</td>
-                <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{a.activity_date ? new Date(a.activity_date).toLocaleDateString() : "—"}</td>
-                <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-[10px] font-medium ${SCOPE_COLORS[a.scope] || ""}`}>{SCOPE_LABELS[a.scope] || a.scope}</span></td>
-                <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{a.category || "—"}</td>
-                <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{a.source || "—"}</td>
-                <td className="px-4 py-3 text-right text-foreground">{a.quantity} {a.unit}</td>
-                <td className="px-4 py-3 text-right font-semibold text-foreground">{a.co2e_kg?.toFixed(1) || "—"}</td>
-                <td className="px-4 py-3 text-right">
-                  <button onClick={() => startEdit(a)} className="p-1 hover:bg-muted rounded"><Edit3 className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                  <button onClick={() => deleteMutation.mutate(a.id)} className="p-1 hover:bg-destructive/10 rounded ml-1"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && <tr><td colSpan="7" className="px-4 py-12 text-center text-muted-foreground">No activities found. Add your first emission activity above.</td></tr>}
-          </tbody>
-        </table>
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/50"><tr>
+                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Activity</th>
+                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden sm:table-cell">Date</th>
+                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Scope</th>
+                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden md:table-cell">Category</th>
+                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Source</th>
+                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Quantity</th>
+                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">CO₂e (kg)</th>
+                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground w-20">Actions</th>
+              </tr></thead>
+              <tbody>
+                {activities.map(a => (
+                  <tr key={a.id} className="hover:bg-muted/30 transition-colors border-b border-border">
+                    <td className="px-4 py-2.5 font-medium text-foreground">{a.activity_name}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground hidden sm:table-cell">{a.activity_date ? new Date(a.activity_date).toLocaleDateString() : "—"}</td>
+                    <td className="px-4 py-2.5"><span className={`px-2 py-0.5 rounded text-[10px] font-medium ${SCOPE_COLORS[a.scope] || ""}`}>{SCOPE_LABELS[a.scope] || a.scope}</span></td>
+                    <td className="px-4 py-2.5 text-muted-foreground hidden md:table-cell">{a.category || "—"}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground hidden lg:table-cell">{a.source || "—"}</td>
+                    <td className="px-4 py-2.5 text-right text-foreground">{a.quantity} {a.unit}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-foreground">{a.co2e_kg?.toFixed(1) || "—"}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button onClick={() => startEdit(a)} className="p-1 hover:bg-muted rounded"><Edit3 className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                      <button onClick={() => deleteMutation.mutate(a.id)} className="p-1 hover:bg-destructive/10 rounded ml-1"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                    </td>
+                  </tr>
+                ))}
+                {activities.length === 0 && <tr><td colSpan="8" className="px-4 py-8 text-center text-muted-foreground">No activities found. Add your first emission activity above.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+        </div>
       </div>
+      
+      {!showForm && (
+        <div className="bg-background">
+          <div className="p-3 lg:p-4 max-w-[1400px] mx-auto">
+            <div className="bg-card border border-border rounded-xl px-4 py-2">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-muted-foreground">
+                  Showing {activities.length > 0 ? ((pagination.page - 1) * 5 + 1) : 0} to {Math.min(pagination.page * 5, pagination.total)} of {pagination.total} activities
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => p - 1)}
+                    disabled={!pagination.hasPrev}
+                    className="inline-flex items-center px-3 py-1.5 border border-border rounded-lg text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-background"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Previous
+                  </button>
+                  <span className="text-xs font-medium text-muted-foreground px-2">
+                    Page {pagination.page} of {pagination.totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => p + 1)}
+                    disabled={!pagination.hasNext}
+                    className="inline-flex items-center px-3 py-1.5 border border-border rounded-lg text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-background"
+                  >
+                    Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

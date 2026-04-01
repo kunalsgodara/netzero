@@ -1,5 +1,10 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+# Resolve the .env file relative to this file's location (backend/.env),
+# so it is found regardless of the working directory when the server starts.
+_ENV_FILE = str(Path(__file__).resolve().parent.parent.parent / ".env")
 
 
 class Settings(BaseSettings):
@@ -17,8 +22,8 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
 
-    # Google Gemini
-    gemini_api_key: str = ""
+    # Groq LLM
+    groq_api_key: str = ""
 
     # Frontend
     frontend_url: str = "http://localhost:5173"
@@ -27,7 +32,7 @@ class Settings(BaseSettings):
     upload_dir: str = "./uploads"
 
     class Config:
-        env_file = ".env"
+        env_file = _ENV_FILE
         case_sensitive = False
 
 

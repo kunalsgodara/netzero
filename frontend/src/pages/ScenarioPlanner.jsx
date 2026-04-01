@@ -19,7 +19,16 @@ export default function ScenarioPlanner() {
   const [aiResult, setAiResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const { data: activities = [] } = useQuery({ queryKey: ["emissions"], queryFn: () => db.entities.EmissionActivity.list("-created_date", 200) });
+  const { data: activitiesData = {} } = useQuery({ 
+    queryKey: ["emissions-scenario"], 
+    queryFn: async () => {
+      const res = await fetch("/api/v1/emission-activities?page=1&page_size=1000&order_by=-created_date", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
+      });
+      return res.json();
+    }
+  });
+  const activities = activitiesData?.items || [];
 
   const scope1 = activities.filter(a => a.scope === "scope_1").reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
   const scope2 = activities.filter(a => a.scope === "scope_2").reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
@@ -63,7 +72,7 @@ Provide strategic analysis in JSON.`,
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-cyan-100 flex items-center justify-center"><FlaskConical className="w-5 h-5 text-cyan-600" /></div>
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><FlaskConical className="w-5 h-5 text-primary" /></div>
           <div><h1 className="text-xl font-bold text-foreground">Scenario Planner</h1><p className="text-xs text-muted-foreground">Model reduction pathways with AI optimization</p></div>
         </div>
         {selectedLevers.length > 0 && (

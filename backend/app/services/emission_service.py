@@ -9,20 +9,51 @@ from app.models.emission import EmissionActivity, EmissionFactor
 from app.schemas.emission import EmissionActivityCreate, EmissionActivityUpdate
 
 
-async def list_activities(user_id: UUID, order_by: str, limit: int, scope: str, category: str, db: AsyncSession):
+import csv
+import io
+from uuid import UUID
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc, func
+from fastapi import HTTPException
+
+from app.models.emission import EmissionActivity, EmissionFactor
+from app.schemas.emission import EmissionActivityCreate, EmissionActivityUpdate
+
+
+async def list_activities(user_id: UUID, order_by: str, page: int, page_size: int, scope: str, category: str, db: AsyncSession):
+    """List emission activities with pagination. Returns (activities, total_count)."""
+    
+    # Build base query
     query = select(EmissionActivity).where(EmissionActivity.user_id == user_id)
+    count_query = select(func.count(EmissionActivity.id)).where(EmissionActivity.user_id == user_id)
+    
     if scope:
         query = query.where(EmissionActivity.scope == scope)
+        count_query = count_query.where(EmissionActivity.scope == scope)
     if category:
         query = query.where(EmissionActivity.category == category)
+        count_query = count_query.where(EmissionActivity.category == category)
+    
+    # Count total
+    count_result = await db.execute(count_query)
+    total = count_result.scalar() or 0
+    
+    # Apply ordering
     if order_by.startswith("-"):
         col = getattr(EmissionActivity, order_by[1:], EmissionActivity.created_date)
         query = query.order_by(desc(col))
     else:
         col = getattr(EmissionActivity, order_by, EmissionActivity.created_date)
         query = query.order_by(col)
-    result = await db.execute(query.limit(limit))
-    return result.scalars().all()
+    
+    # Apply pagination
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+    
+    result = await db.execute(query)
+    activities = result.scalars().all()
+    
+    return activities, total
 
 
 async def create_activity(user_id: UUID, data: EmissionActivityCreate, db: AsyncSession):

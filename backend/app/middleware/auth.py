@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
+import time
 
 from jose import jwt, JWTError
 from passlib.context import CryptContext
@@ -14,8 +15,24 @@ from app.config.database import get_db
 from app.models.user import User
 
 settings = get_settings()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=10)
 security = HTTPBearer()
+
+# Simple TTL cache for user lookups — avoids a DB hit on every authenticated request
+_user_cache: dict[str, tuple] = {}  # user_id -> (User, expires_at)
+_USER_CACHE_TTL = 60  # seconds
+
+
+def _cache_user(user_id: str, user: User):
+    _user_cache[user_id] = (user, time.monotonic() + _USER_CACHE_TTL)
+
+
+def _get_cached_user(user_id: str) -> Optional[User]:
+    entry = _user_cache.get(user_id)
+    if entry and time.monotonic() < entry[1]:
+        return entry[0]
+    _user_cache.pop(user_id, None)
+    return None
 
 
 def hash_password(password: str) -> str:
@@ -51,8 +68,16 @@ async def get_current_user(
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    # Return cached user if still valid (avoids DB hit on every request)
+    cached = _get_cached_user(user_id)
+    if cached:
+        return cached
+
     result = await db.execute(select(User).where(User.id == UUID(user_id)))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or inactive")
+
+    _cache_user(user_id, user)
     return user

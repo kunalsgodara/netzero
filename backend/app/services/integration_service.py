@@ -2,38 +2,84 @@ import os
 import json
 import uuid
 
+import httpx
 from fastapi import HTTPException, UploadFile
-import google.generativeai as genai
 
 from app.config.settings import get_settings
 
 settings = get_settings()
 
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "llama-3.1-8b-instant"
+
+# Persistent client — reuses TCP/TLS connection across requests (avoids ~300ms handshake per call)
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=30),
+        )
+    return _http_client
+
 
 async def invoke_llm(prompt: str, response_json_schema: dict = None):
-    if not settings.gemini_api_key:
-        raise HTTPException(status_code=500, detail="Gemini API key not configured")
+    if not settings.groq_api_key:
+        raise HTTPException(status_code=500, detail="Groq API key not configured. Add GROQ_API_KEY to backend/.env")
 
-    genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    system_message = (
+        "You are an expert carbon accounting and CBAM compliance advisor. "
+        "Analyze the provided emissions and CBAM data and return ONLY valid JSON. "
+        "Do not include any markdown, code fences, or explanatory text outside of the JSON."
+    )
 
-    full_prompt = prompt
-    if response_json_schema:
-        full_prompt += (
-            "\n\nIMPORTANT: You MUST respond with valid JSON only, no markdown fences, no extra text. "
-            f"The JSON must conform to this schema:\n{json.dumps(response_json_schema, indent=2)}"
-        )
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 2048,
+    }
+
+    # Note: do NOT use response_format json_object — llama-3.1-8b-instant returns
+    # HTTP 400 "Failed to generate JSON" for complex schemas. The system prompt
+    # already instructs the model to return only valid JSON.
 
     try:
-        response = model.generate_content(full_prompt)
-        text = response.text.strip()
+        client = _get_http_client()
+        resp = await client.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {settings.groq_api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
 
+        if resp.status_code != 200:
+            try:
+                err_body = resp.json()
+                detail = err_body.get("error", {}).get("message", resp.text)
+            except Exception:
+                detail = resp.text
+            raise HTTPException(
+                status_code=500,
+                detail=f"LLM invocation failed: {resp.status_code} {detail}",
+            )
+
+        data = resp.json()
+        text = data["choices"][0]["message"]["content"].strip()
+
+        # Strip markdown code fences if model adds them anyway
         if text.startswith("```"):
             lines = text.split("\n")
-            if lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
+            lines = lines[1:] if lines[0].startswith("```") else lines
+            lines = lines[:-1] if lines and lines[-1].strip() == "```" else lines
             text = "\n".join(lines)
 
         if response_json_schema:
@@ -47,6 +93,8 @@ async def invoke_llm(prompt: str, response_json_schema: dict = None):
             except json.JSONDecodeError:
                 return {"response": text}
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM invocation failed: {str(e)}")
 

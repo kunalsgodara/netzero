@@ -21,14 +21,33 @@ def ets_price():
     return get_eu_ets_price()
 
 
-@router.get("", response_model=List[CBAMImportResponse])
+@router.get("")
 async def list_imports(
-    order_by: str = "-created_date", limit: int = 200,
-    category: Optional[str] = None, declaration_status: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 4,
+    order_by: str = "-created_date",
+    category: Optional[str] = None,
+    declaration_status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await list_cbam_imports(current_user.id, order_by, limit, category, declaration_status, db)
+    """List CBAM imports with pagination. Returns newest first by default."""
+    # Allow large page_size for dashboard queries (up to 10000)
+    actual_page_size = min(page_size, 10000)
+    imports, total = await list_cbam_imports(
+        current_user.id, order_by, page, actual_page_size, category, declaration_status, db
+    )
+    total_pages = (total + actual_page_size - 1) // actual_page_size
+    
+    return {
+        "items": [CBAMImportResponse.model_validate(i) for i in imports],
+        "page": page,
+        "page_size": actual_page_size,
+        "total": total,
+        "total_pages": total_pages,
+        "has_next": page < total_pages,
+        "has_prev": page > 1,
+    }
 
 
 @router.post("", response_model=CBAMImportResponse, status_code=201)

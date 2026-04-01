@@ -15,8 +15,21 @@ const INDUSTRY_BENCHMARKS = {
 };
 
 export default function Benchmarking() {
-  const { data: activities = [] } = useQuery({ queryKey: ["emissions"], queryFn: () => db.entities.EmissionActivity.list("-created_date", 200) });
-  const { data: orgs = [] } = useQuery({ queryKey: ["orgs"], queryFn: () => db.entities.Organization.list("-created_date", 1) });
+  const { data: activitiesData = {} } = useQuery({ 
+    queryKey: ["emissions-bench"], 
+    queryFn: async () => {
+      const res = await fetch("/api/v1/emission-activities?page=1&page_size=1000&order_by=-created_date", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
+      });
+      return res.json();
+    }
+  });
+  const activities = activitiesData?.items || [];
+  
+  const { data: orgs = [] } = useQuery({ 
+    queryKey: ["orgs"], 
+    queryFn: () => db.entities.Organization.list("-created_date", 1) 
+  });
 
   const org = orgs[0];
   const industry = org?.industry || "manufacturing";
@@ -58,7 +71,7 @@ export default function Benchmarking() {
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center"><BarChart3 className="w-5 h-5 text-violet-600" /></div>
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><BarChart3 className="w-5 h-5 text-primary" /></div>
         <div><h1 className="text-xl font-bold text-foreground">Benchmarking</h1><p className="text-xs text-muted-foreground">Compare against industry peers ({industry})</p></div>
       </div>
 

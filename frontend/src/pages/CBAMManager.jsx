@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useEffect } from "react";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, ShieldCheck, Filter, Edit3, Trash2, Calendar } from "lucide-react";
-import Select from "@/components/ui/Select";
+import { Plus, ShieldCheck, Filter, Edit3, Trash2, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import CustomSelect from "@/components/ui/CustomSelect";
+import SearchableSelect from "@/components/ui/SearchableSelect";
+import { useToast, ToastContainer } from "@/components/ui/Toast";
 
 const db = globalThis.__B44_DB__
 
@@ -53,7 +55,11 @@ export default function CBAMManager() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState(EMPTY_FORM);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const { toasts, toast, removeToast } = useToast();
   const queryClient = useQueryClient();
+  const clearFieldError = (field) => setFieldErrors(p => ({ ...p, [field]: false }));
 
   // ─── Fetch all emission factors, filter to CBAM scope ───────────
   const { data: rawFactors = [], isLoading: isLoadingFactors } = useQuery({
@@ -104,33 +110,53 @@ export default function CBAMManager() {
   });
 
   // ─── Fetch CBAM imports ──────────────────────────────────────────
-  const { data: imports = [], isLoading } = useQuery({
-    queryKey: ["cbam-imports"],
-    queryFn: () => db.entities.CBAMImport.list("-created_date", 200),
+  const { data: importsData } = useQuery({
+    queryKey: ["cbam-imports", currentPage, categoryFilter, statusFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        page_size: "5",
+        order_by: "-created_date",
+      });
+      if (categoryFilter !== "all") params.set("category", categoryFilter);
+      if (statusFilter !== "all") params.set("declaration_status", statusFilter);
+      
+      const res = await fetch(`/api/v1/cbam-imports?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
+      });
+      return res.json();
+    },
   });
+  
+  const imports = importsData?.items || [];
+  const pagination = {
+    page: importsData?.page || 1,
+    total: importsData?.total || 0,
+    totalPages: importsData?.total_pages || 1,
+    hasNext: importsData?.has_next || false,
+    hasPrev: importsData?.has_prev || false,
+  };
 
   const createMutation = useMutation({
     mutationFn: (data) => db.entities.CBAMImport.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cbam-imports"] });
-      setShowForm(false);
-      resetForm();
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["cbam-imports"] }); 
+      setShowForm(false); 
+      resetForm(); 
+      setCurrentPage(1); // Reset to first page
+      toast("Import saved successfully", "success"); 
     },
-    onError: (err) => alert(`Failed to save: ${err.message}`),
+    onError: (err) => toast(`Failed to save: ${err.message}`, "error"),
   });
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => db.entities.CBAMImport.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cbam-imports"] });
-      setShowForm(false);
-      resetForm();
-    },
-    onError: (err) => alert(`Failed to save: ${err.message}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["cbam-imports"] }); setShowForm(false); resetForm(); toast("Import updated successfully", "success"); },
+    onError: (err) => toast(`Failed to save: ${err.message}`, "error"),
   });
   const deleteMutation = useMutation({
     mutationFn: (id) => db.entities.CBAMImport.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cbam-imports"] }),
-    onError: (err) => alert(`Failed to delete: ${err.message}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["cbam-imports"] }); toast("Import deleted", "warning"); },
+    onError: (err) => toast(`Failed to delete: ${err.message}`, "error"),
   });
 
   const resetForm = () => { 
@@ -218,6 +244,18 @@ export default function CBAMManager() {
 
   const handleSave = (e) => {
     e.preventDefault();
+    const errs = {};
+    if (!form.product_name.trim()) errs.product_name = true;
+    if (!form.hscn_code.trim()) errs.hscn_code = true;
+    if (!form.category) errs.category = true;
+    if (!form.origin_country.trim()) errs.origin_country = true;
+    if (!form.quantity_tonnes || parseFloat(form.quantity_tonnes) <= 0) errs.quantity_tonnes = true;
+    if (Object.keys(errs).length) {
+      setFieldErrors(errs);
+      toast("Please fill in all required fields", "error");
+      return;
+    }
+    setFieldErrors({});
     const data = {
       ...form,
       quantity_tonnes: parseFloat(form.quantity_tonnes) || 0,
@@ -254,12 +292,9 @@ export default function CBAMManager() {
   };
 
   // ─── Filtering ────────────────────────────────────────────────────
-  const filtered = imports.filter((i) =>
-    (categoryFilter === "all" || i.category === categoryFilter) &&
-    (statusFilter === "all" || i.declaration_status === statusFilter)
-  );
-  const totalEmissions = filtered.reduce((s, i) => s + (i.embedded_emissions || 0), 0);
-  const totalCharge = filtered.reduce((s, i) => s + (i.cbam_charge_eur || 0), 0);
+  // Note: Filtering now happens on backend via query params
+  const totalEmissions = imports.reduce((s, i) => s + (i.embedded_emissions || 0), 0);
+  const totalCharge = imports.reduce((s, i) => s + (i.cbam_charge_eur || 0), 0);
 
   // Computed display values for form
   const displayEmbedded = parseFloat(form.embedded_emissions) || 0;
@@ -268,7 +303,10 @@ export default function CBAMManager() {
   const factorsLoaded = rawFactors.length > 0;
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
+    <div className="h-screen flex flex-col">
+      <div className="flex-1 overflow-auto">
+        <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
+          <ToastContainer toasts={toasts} onRemove={removeToast} />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -314,32 +352,34 @@ export default function CBAMManager() {
                   <label className="text-sm font-semibold text-foreground">Product Name *</label>
                   <input
                     value={form.product_name}
-                    onChange={(e) => setForm({ ...form, product_name: e.target.value })}
-                    className="w-full mt-2 px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none"
-                    required placeholder="e.g. Hot-rolled steel coils" />
+                    onChange={(e) => { setForm({ ...form, product_name: e.target.value }); clearFieldError("product_name"); }}
+                    className={`w-full mt-2 px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none ${fieldErrors.product_name ? "border-red-400 bg-red-50/30" : ""}`}
+                    placeholder="e.g. Hot-rolled steel coils" />
                 </div>
                 <div>
                   <label className="text-sm font-semibold text-foreground">HSCN Code *</label>
-                  <input
-                    list="hscn-options"
+                  <SearchableSelect
+                    className="mt-2"
                     value={form.hscn_code}
-                    onChange={(e) => handleHscnChangeDirect(e.target.value)}
-                    className="w-full mt-2 px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none"
-                    required placeholder="e.g. 7208.10" />
-                  <datalist id="hscn-options">
-                    {currentHscnOptions.map((opt) => (
-                      <option key={opt.code} value={opt.code}>{opt.description}</option>
-                    ))}
-                  </datalist>
+                    onChange={(val) => { handleHscnChangeDirect(val); clearFieldError("hscn_code"); }}
+                    hasError={!!fieldErrors.hscn_code}
+                    placeholder="Search HSCN code..."
+                    searchPlaceholder="Type code or description..."
+                    options={currentHscnOptions.map((opt) => ({
+                      value: opt.code,
+                      label: opt.code,
+                      sublabel: opt.description,
+                    }))}
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-semibold text-foreground">Quantity (tonnes) *</label>
                   <input
                     type="number" step="any" min="0"
                     value={form.quantity_tonnes}
-                    onChange={(e) => handleQuantityChange(e.target.value)}
-                    className="w-full mt-2 px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none"
-                    required placeholder="0.00" />
+                    onChange={(e) => { handleQuantityChange(e.target.value); clearFieldError("quantity_tonnes"); }}
+                    className={`w-full mt-2 px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none ${fieldErrors.quantity_tonnes ? "border-red-400 bg-red-50/30" : ""}`}
+                    placeholder="0.00" />
                 </div>
                 <div>
                   <label className="text-sm font-semibold text-foreground flex items-center justify-between">
@@ -366,25 +406,22 @@ export default function CBAMManager() {
               <div className="space-y-6">
                 <div>
                   <label className="text-sm font-semibold text-foreground">Category *</label>
-                  <Select
-                    value={form.category}
-                    onChange={(e) => handleCategoryChange(e.target.value)}
+                  <CustomSelect
                     className="mt-2"
-                    required
-                  >
-                    <option value="">Select category...</option>
-                    {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
-                  </Select>
+                    value={form.category}
+                    onChange={(val) => { handleCategoryChange(val); clearFieldError("category"); }}
+                    placeholder="Select category..."
+                    options={Object.entries(CATEGORY_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    hasError={!!fieldErrors.category}
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-semibold text-foreground">Origin Country *</label>
                   <input
                     value={form.origin_country}
-                    onChange={(e) => setForm({ ...form, origin_country: e.target.value })}
-                    className="w-full mt-2 px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none"
-                    required placeholder="e.g. Turkey" />
+                    onChange={(e) => { setForm({ ...form, origin_country: e.target.value }); clearFieldError("origin_country"); }}
+                    className={`w-full mt-2 px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none ${fieldErrors.origin_country ? "border-red-400 bg-red-50/30" : ""}`}
+                    placeholder="e.g. Turkey" />
                 </div>
                 <div>
                   <label className="text-sm font-semibold text-foreground">Emission Factor (tCO₂e/t)</label>
@@ -397,26 +434,22 @@ export default function CBAMManager() {
                 </div>
                 <div>
                   <label className="text-sm font-semibold text-foreground">Quarter</label>
-                  <Select
-                    value={form.quarter}
-                    onChange={(e) => setForm({ ...form, quarter: e.target.value })}
+                  <CustomSelect
                     className="mt-2"
-                  >
-                    <option value="">Select quarter</option>
-                    {QUARTERS.map((q) => <option key={q} value={q}>{q}</option>)}
-                  </Select>
+                    value={form.quarter}
+                    onChange={(val) => setForm({ ...form, quarter: val })}
+                    placeholder="Select quarter"
+                    options={QUARTERS.map((q) => ({ value: q, label: q }))}
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-semibold text-foreground">Declaration Status</label>
-                  <Select
-                    value={form.declaration_status}
-                    onChange={(e) => setForm({ ...form, declaration_status: e.target.value })}
+                  <CustomSelect
                     className="mt-2"
-                  >
-                    {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
-                  </Select>
+                    value={form.declaration_status}
+                    onChange={(val) => setForm({ ...form, declaration_status: val })}
+                    options={Object.entries(STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                  />
                 </div>
               </div>
             </div>
@@ -494,7 +527,7 @@ export default function CBAMManager() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-card border border-border rounded-lg p-4">
             <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Total Imports</p>
-            <p className="text-2xl font-bold text-foreground mt-1">{filtered.length}</p>
+            <p className="text-2xl font-bold text-foreground mt-1">{pagination.total}</p>
           </div>
           <div className="bg-card border border-border rounded-lg p-4">
             <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Embedded Emissions</p>
@@ -512,63 +545,75 @@ export default function CBAMManager() {
         <>
           <div className="flex items-center gap-3 flex-wrap">
             <Filter className="w-4 h-4 text-muted-foreground" />
-            <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="h-8 text-xs w-40">
-              <option value="all">All Categories</option>
-              {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </Select>
-            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-8 text-xs w-36">
-              <option value="all">All Statuses</option>
-              {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </Select>
+            <div className="w-40">
+              <CustomSelect
+                value={categoryFilter}
+                onChange={(val) => { setCategoryFilter(val); setCurrentPage(1); }}
+                options={[
+                  { value: "all", label: "All Categories" },
+                  ...Object.entries(CATEGORY_LABELS).map(([k, v]) => ({ value: k, label: v }))
+                ]}
+              />
+            </div>
+            <div className="w-36">
+              <CustomSelect
+                value={statusFilter}
+                onChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}
+                options={[
+                  { value: "all", label: "All Statuses" },
+                  ...Object.entries(STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))
+                ]}
+              />
+            </div>
           </div>
 
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <table className="w-full text-xs">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Product</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">HSCN Code</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Category</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Origin</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Date / Quarter</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Tonnes</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">tCO₂e</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Charge (€)</th>
-                  <th className="text-center px-4 py-3 font-medium text-muted-foreground">Status</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground w-20">Actions</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Product</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden sm:table-cell">HSCN Code</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden md:table-cell">Category</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden md:table-cell">Origin</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Date / Quarter</th>
+                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Tonnes</th>
+                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">tCO₂e</th>
+                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Charge (€)</th>
+                  <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">Status</th>
+                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground w-20">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map((imp) => (
-                  <tr key={imp.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-foreground">{imp.product_name}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell font-mono">{imp.hscn_code || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{CATEGORY_LABELS[imp.category] || imp.category}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{imp.origin_country}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
+              <tbody>
+                {imports.map((imp) => (
+                  <tr key={imp.id} className="hover:bg-muted/30 transition-colors border-b border-border">
+                    <td className="px-4 py-2.5 font-medium text-foreground">{imp.product_name}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground hidden sm:table-cell font-mono">{imp.hscn_code || "—"}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground hidden md:table-cell">{CATEGORY_LABELS[imp.category] || imp.category}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground hidden md:table-cell">{imp.origin_country}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground hidden lg:table-cell">
                       {imp.import_date ? new Date(imp.import_date).toLocaleDateString("en-GB") : "—"}
                       {imp.quarter && <span className="ml-2 px-1.5 py-0.5 bg-muted rounded text-[10px]">{imp.quarter}</span>}
                     </td>
-                    <td className="px-4 py-3 text-right text-foreground">{imp.quantity_tonnes?.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-foreground hidden lg:table-cell">
+                    <td className="px-4 py-2.5 text-right text-foreground">{imp.quantity_tonnes?.toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-right text-foreground hidden lg:table-cell">
                       {imp.embedded_emissions ? imp.embedded_emissions.toFixed(2) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-primary">
+                    <td className="px-4 py-2.5 text-right font-semibold text-primary">
                       {imp.cbam_charge_eur ? `€${imp.cbam_charge_eur.toLocaleString("en-GB", { minimumFractionDigits: 2 })}` : "—"}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-4 py-2.5 text-center">
                       <span className={`px-2 py-0.5 rounded border text-[10px] font-medium ${STATUS_COLORS[imp.declaration_status] || ""}`}>
                         {STATUS_LABELS[imp.declaration_status] || imp.declaration_status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-2.5 text-right">
                       <button onClick={() => startEdit(imp)} className="p-1 hover:bg-muted rounded"><Edit3 className="w-3.5 h-3.5 text-muted-foreground" /></button>
                       <button onClick={() => deleteMutation.mutate(imp.id)} className="p-1 hover:bg-destructive/10 rounded ml-1"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
                     </td>
                   </tr>
                 ))}
-                {filtered.length === 0 && (
-                  <tr><td colSpan="10" className="px-4 py-12 text-center text-muted-foreground">
+                {imports.length === 0 && (
+                  <tr><td colSpan="10" className="px-4 py-8 text-center text-muted-foreground">
                     No CBAM imports found. Add your first import above.
                   </td></tr>
                 )}
@@ -576,6 +621,41 @@ export default function CBAMManager() {
             </table>
           </div>
         </>
+      )}
+        </div>
+      </div>
+      
+      {!showForm && (
+        <div className="bg-background">
+          <div className="p-3 lg:p-4 max-w-[1400px] mx-auto">
+            <div className="bg-card border border-border rounded-xl px-4 py-2">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-muted-foreground">
+                  Showing {imports.length > 0 ? ((pagination.page - 1) * 5 + 1) : 0} to {Math.min(pagination.page * 5, pagination.total)} of {pagination.total} imports
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => p - 1)}
+                    disabled={!pagination.hasPrev}
+                    className="inline-flex items-center px-3 py-1.5 border border-border rounded-lg text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-background"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Previous
+                  </button>
+                  <span className="text-xs font-medium text-muted-foreground px-2">
+                    Page {pagination.page} of {pagination.totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => p + 1)}
+                    disabled={!pagination.hasNext}
+                    className="inline-flex items-center px-3 py-1.5 border border-border rounded-lg text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-background"
+                  >
+                    Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
