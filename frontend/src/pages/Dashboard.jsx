@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils/routes";
-import { Activity, ShieldCheck, Flame, Zap, ArrowRight, Leaf } from "lucide-react";
+import { Activity, BadgeEuro, ShieldCheck, Flame, Factory, Plug, ArrowRight, LayoutDashboard, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from "recharts";
 import { format } from "date-fns";
 
@@ -12,15 +12,35 @@ const db = globalThis.__B44_DB__
 export default function Dashboard() {
   const [org, setOrg] = useState(null);
 
-  const { data: activities = [] } = useQuery({
-    queryKey: ["emissions"],
-    queryFn: () => db.entities.EmissionActivity.list("-created_date", 200),
+  const { data: activitiesData = {}, isLoading: activitiesLoading, error: activitiesError } = useQuery({
+    queryKey: ["emissions-dashboard"],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/emission-activities?page=1&page_size=1000&order_by=-created_date`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
+      });
+      if (!res.ok) throw new Error(`Failed to fetch activities: ${res.status}`);
+      const data = await res.json();
+      console.log("Dashboard activities data:", data);
+      return data;
+    },
   });
+  const activities = activitiesData?.items || [];
+  console.log("Dashboard activities array:", activities);
 
-  const { data: imports = [] } = useQuery({
-    queryKey: ["cbam-imports"],
-    queryFn: () => db.entities.CBAMImport.list("-created_date", 200),
+  const { data: importsData = {}, isLoading: importsLoading, error: importsError } = useQuery({
+    queryKey: ["cbam-imports-dashboard"],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/cbam-imports?page=1&page_size=1000&order_by=-created_date`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
+      });
+      if (!res.ok) throw new Error(`Failed to fetch imports: ${res.status}`);
+      const data = await res.json();
+      console.log("Dashboard imports data:", data);
+      return data;
+    },
   });
+  const imports = importsData?.items || [];
+  console.log("Dashboard imports array:", imports);
 
   const { data: orgs = [] } = useQuery({
     queryKey: ["orgs"],
@@ -35,6 +55,40 @@ export default function Dashboard() {
   const scope1 = activities.filter(a => a.scope === "scope_1").reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
   const scope2 = activities.filter(a => a.scope === "scope_2").reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
   const totalCBAMCharge = imports.reduce((s, i) => s + (i.cbam_charge_eur || 0), 0);
+
+  console.log("Dashboard calculations:", { totalEmissions, scope1, scope2, totalCBAMCharge, activitiesCount: activities.length, importsCount: imports.length });
+
+  // Quarter-over-quarter trend calculation
+  const now = new Date();
+  const curQStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+  const prevQStart = new Date(curQStart); prevQStart.setMonth(prevQStart.getMonth() - 3);
+  const prevQEnd = new Date(curQStart); prevQEnd.setMilliseconds(-1);
+
+  const inRange = (item, start, end) => {
+    const d = new Date(item.activity_date || item.import_date || item.created_date);
+    return d >= start && d <= end;
+  };
+  const pctChange = (cur, prev) => {
+    if (prev === 0) return null; // no previous data — don't show trend
+    return Number(((cur - prev) / prev * 100).toFixed(1));
+  };
+
+  const curAct = activities.filter(a => inRange(a, curQStart, now));
+  const prevAct = activities.filter(a => inRange(a, prevQStart, prevQEnd));
+
+  const curTotal = curAct.reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
+  const prevTotal = prevAct.reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
+  const curS1 = curAct.filter(a => a.scope === "scope_1").reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
+  const prevS1 = prevAct.filter(a => a.scope === "scope_1").reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
+  const curS2 = curAct.filter(a => a.scope === "scope_2").reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
+  const prevS2 = prevAct.filter(a => a.scope === "scope_2").reduce((s, a) => s + (a.co2e_kg || 0), 0) / 1000;
+  const curCBAM = imports.filter(i => inRange(i, curQStart, now)).reduce((s, i) => s + (i.cbam_charge_eur || 0), 0);
+  const prevCBAM = imports.filter(i => inRange(i, prevQStart, prevQEnd)).reduce((s, i) => s + (i.cbam_charge_eur || 0), 0);
+
+  const trendTotal = pctChange(curTotal, prevTotal);
+  const trendS1 = pctChange(curS1, prevS1);
+  const trendS2 = pctChange(curS2, prevS2);
+  const trendCBAM = pctChange(curCBAM, prevCBAM);
 
   const CATEGORY_LABELS = {
     cement: "Cement",
@@ -65,21 +119,30 @@ export default function Dashboard() {
     };
   }).filter(d => d.emissions > 0 || d.charge > 0);
 
-  const KPICard = ({ title, value, subtitle, icon: Icon, trend }) => (
+  const KPICard = ({ title, value, subtitle, icon: Icon, trend, iconBg }) => (
     <div className="bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{title}</p>
-          <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
+          <p className="text-2xl font-bold text-foreground mt-1 truncate">{value}</p>
           <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
         </div>
-        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Icon className="w-4 h-4 text-primary" />
-        </div>
+        {Icon && (
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ml-3 ${iconBg || "bg-primary/10"}`}>
+            <Icon className="w-4 h-4 text-primary" />
+          </div>
+        )}
       </div>
-      {trend && (
-        <p className={`text-xs mt-2 font-medium ${trend < 0 ? "text-green-600" : "text-red-500"}`}>
+      {trend !== null && trend !== undefined ? (
+        <p className={`text-xs mt-2 font-medium flex items-center gap-1 ${
+          trend < 0 ? "text-green-600" : trend > 0 ? "text-red-500" : "text-muted-foreground"
+        }`}>
+          {trend < 0 ? <TrendingDown className="w-3 h-3" /> : trend > 0 ? <TrendingUp className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
           {trend > 0 ? "+" : ""}{trend}% vs last quarter
+        </p>
+      ) : (
+        <p className="text-xs mt-2 text-muted-foreground flex items-center gap-1">
+          <Minus className="w-3 h-3" /> No prior quarter data
         </p>
       )}
     </div>
@@ -110,15 +173,20 @@ export default function Dashboard() {
   })).sort((a, b) => a.sortDate - b.sortDate);
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-8">
+    <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {org ? `Welcome back` : "Dashboard"}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {org ? `${org.name} — Carbon footprint overview` : "Your carbon accounting overview"}
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <LayoutDashboard className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">
+              {org ? `Welcome back` : "Dashboard"}
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              {org ? `${org.name} — Carbon footprint overview` : "Your carbon accounting overview"}
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Link to={createPageUrl("Emissions")}>
@@ -135,10 +203,34 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard title="Total Emissions" value={`${totalEmissions.toFixed(1)} tCO₂e`} subtitle={`${activities.length} activities logged`} icon={Flame} trend={-5.2} />
-        <KPICard title="Scope 1" value={`${scope1.toFixed(1)} tCO₂e`} subtitle="Direct emissions" icon={Zap} trend={-3.1} />
-        <KPICard title="Scope 2" value={`${scope2.toFixed(1)} tCO₂e`} subtitle="Indirect (energy)" icon={Activity} trend={-8.4} />
-        <KPICard title="CBAM Liability" value={`€${totalCBAMCharge.toLocaleString()}`} subtitle={`${imports.length} imports tracked`} icon={ShieldCheck} trend={12.6} />
+        <KPICard
+          title="Total Emissions"
+          value={<>{totalEmissions.toFixed(1)} <span className="text-sm font-normal">tCO₂e</span></>}
+          subtitle={`${activities.length} activities logged`}
+          icon={Flame}
+          trend={trendTotal}
+        />
+        <KPICard
+          title="Scope 1"
+          value={<>{scope1.toFixed(1)} <span className="text-sm font-normal">tCO₂e</span></>}
+          subtitle="Direct combustion"
+          icon={Factory}
+          trend={trendS1}
+        />
+        <KPICard
+          title="Scope 2"
+          value={<>{scope2.toFixed(1)} <span className="text-sm font-normal">tCO₂e</span></>}
+          subtitle="Purchased electricity"
+          icon={Plug}
+          trend={trendS2}
+        />
+        <KPICard
+          title="CBAM Liability"
+          value={`€${Number(totalCBAMCharge.toFixed(2)).toLocaleString("en-EU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          subtitle={`${imports.length} imports tracked`}
+          icon={BadgeEuro}
+          trend={trendCBAM}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

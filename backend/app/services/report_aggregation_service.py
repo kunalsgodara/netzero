@@ -35,8 +35,15 @@ SCOPE_LABELS = {
 def _date_filter(model, start: Optional[date], end: Optional[date]):
     """Build a date filter using activity_date / import_date, falling back to created_date."""
     conditions = []
-    date_col = getattr(model, "activity_date", None) or getattr(model, "import_date", None)
     fallback_col = model.created_date
+
+    # Use hasattr to detect the correct date column for this model
+    if hasattr(model, "activity_date"):
+        date_col = model.activity_date
+    elif hasattr(model, "import_date"):
+        date_col = model.import_date
+    else:
+        date_col = None
 
     if start and end and date_col is not None:
         conditions.append(

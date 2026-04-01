@@ -4,10 +4,10 @@ import type { ReportCreatePayload, ReportGeneratePayload } from '@/types/report'
 
 export const REPORTS_KEY = ['reports'] as const;
 
-export function useReports() {
+export function useReports(page = 1, pageSize = 4) {
   return useQuery({
-    queryKey: REPORTS_KEY,
-    queryFn: () => reportService.listReports(),
+    queryKey: [...REPORTS_KEY, page, pageSize],
+    queryFn: () => reportService.listReports(page, pageSize),
   });
 }
 
@@ -56,6 +56,6 @@ export function useAggregationPreview(startDate?: string, endDate?: string) {
   return useQuery({
     queryKey: ['aggregation-preview', startDate, endDate],
     queryFn: () => reportService.previewAggregation(startDate, endDate),
-    enabled: true,
+    enabled: !!(startDate && endDate),
   });
 }

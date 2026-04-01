@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Use relative paths so Vite's proxy handles routing in dev, and the same domain in production.
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export function getToken(): string | null {
   return localStorage.getItem('access_token');

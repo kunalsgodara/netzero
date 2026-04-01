@@ -48,6 +48,13 @@ async def health():
     return {"status": "ok", "app": "NetZeroWorks"}
 
 
+@app.on_event("shutdown")
+async def shutdown():
+    from app.services.integration_service import _http_client
+    if _http_client and not _http_client.is_closed:
+        await _http_client.aclose()
+
+
 @app.on_event("startup")
 async def startup():
     from app.config.database import Base

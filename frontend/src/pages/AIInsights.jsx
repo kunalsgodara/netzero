@@ -2,28 +2,40 @@ import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
-  Sparkles,
-  RefreshCw,
-  AlertTriangle,
-  TrendingDown,
-  CheckCircle2,
-  Lightbulb,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldX,
-  ArrowRight,
-  BarChart3,
-  Leaf,
-  Zap,
-  Clock,
-  ChevronDown,
-  ChevronUp,
-  Info,
+  Sparkles, RefreshCw, AlertTriangle, TrendingDown, CheckCircle2,
+  Lightbulb, ShieldCheck, ShieldAlert, ShieldX, ArrowRight,
+  BarChart3, Leaf, Zap, Clock, ChevronDown, ChevronUp, Info, XCircle,
 } from "lucide-react";
 
-const db = globalThis.__B44_DB__;
+// ── API helpers ───────────────────────────────────────────────────────────────
+function authHeaders() {
+  const token = localStorage.getItem("access_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+async function apiFetch(path) {
+  const res = await fetch(path, { headers: authHeaders() });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Unknown error" }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function callLLM(prompt, response_json_schema) {
+  const res = await fetch("/api/integrations/llm/invoke", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ prompt, response_json_schema }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Unknown error" }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── Config ────────────────────────────────────────────────────────────────────
 
 const SEVERITY_CONFIG = {
   low: {
@@ -77,8 +89,6 @@ const ACTION_TYPE_CONFIG = {
 };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-
-
 
 function AnomalyCard({ anomaly }) {
   const [expanded, setExpanded] = useState(false);
@@ -159,19 +169,29 @@ function RecommendationCard({ rec, navigate }) {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function AIInsights() {
-  const [insights, setInsights] = useState(null);
+  const [insights, setInsights] = useState(() => {
+    try {
+      const saved = localStorage.getItem("ai_insights");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const { data: activities = [] } = useQuery({
-    queryKey: ["emissions"],
-    queryFn: () => db.entities.EmissionActivity.list("-created_date", 200),
+  const { data: activitiesData = {} } = useQuery({
+    queryKey: ["emissions-ai"],
+    queryFn: () => apiFetch("/api/v1/emission-activities?page=1&page_size=1000&order_by=-created_date"),
   });
-  const { data: imports = [] } = useQuery({
-    queryKey: ["cbam-imports"],
-    queryFn: () => db.entities.CBAMImport.list("-created_date", 200),
+  const activities = activitiesData?.items || [];
+  
+  const { data: importsData = {} } = useQuery({
+    queryKey: ["cbam-imports-ai"],
+    queryFn: () => apiFetch("/api/v1/cbam-imports?page=1&page_size=1000&order_by=-created_date"),
   });
+  const imports = importsData?.items || [];
 
   const stats = useMemo(() => {
     const totalKg = activities.reduce((s, a) => s + (a.co2e_kg || 0), 0);
@@ -190,76 +210,75 @@ export default function AIInsights() {
     setError(null);
     setInsights(null);
 
-    const prompt = `You are a senior AI carbon compliance advisor analyzing data for a NetZeroWorks client.
+    const hasData = activities.length > 0 || imports.length > 0;
 
-DATA SUMMARY:
-- Total Emissions: ${stats.total.toFixed(1)} tCO₂e
-  * Scope 1 (Direct, e.g., fuel combustion): ${stats.scope1.toFixed(1)} tCO₂e
-  * Scope 2 (Electricity): ${stats.scope2.toFixed(1)} tCO₂e
-  * Scope 3 (Value chain): ${stats.scope3.toFixed(1)} tCO₂e
-- CBAM Imports: ${stats.importCount} entries, Total estimated CBAM charge: €${stats.totalCBAM.toFixed(0)}
-- CBAM Embedded Emissions by Category: ${JSON.stringify(stats.categories)}
+    const prompt = `You are a senior AI carbon compliance advisor for a carbon management platform called NetZeroWorks.
 
-INSTRUCTIONS:
-Produce a structured, actionable JSON analysis. Be specific, data-driven and concise.
-For anomalies: flag anything unusual, e.g. high Scope 2 vs Scope 1, excessive CBAM charges for a single category, or missing data.
-For recommendations: provide 3-4 ranked by impact. Each must include an "action_type" field that is one of: PLANNER, CBAM, or EMISSIONS (to allow UI deep-linking).
-For compliance_status.level: use exactly one of: "good", "warning", or "critical".`;
+${hasData
+  ? `COMPANY DATA:
+- Total Emissions: ${stats.total.toFixed(1)} tCO2e
+  - Scope 1 (Direct combustion): ${stats.scope1.toFixed(1)} tCO2e
+  - Scope 2 (Purchased electricity): ${stats.scope2.toFixed(1)} tCO2e
+  - Scope 3 (Value chain): ${stats.scope3.toFixed(1)} tCO2e
+- CBAM Imports: ${stats.importCount} entries, estimated CBAM charge: EUR ${stats.totalCBAM.toFixed(0)}
+- CBAM by Category: ${JSON.stringify(stats.categories)}`
+  : `COMPANY DATA: No emissions data recorded yet. This is a new user onboarding.`}
 
-    const schema = {
-      type: "object",
-      properties: {
-        overall_summary: { type: "string" },
-        compliance_status: {
-          type: "object",
-          properties: {
-            level: { type: "string" },
-            summary: { type: "string" },
-            cbam_risk_level: { type: "string" },
-          },
-        },
-        key_metrics: {
-          type: "object",
-          properties: {
-            largest_scope: { type: "string" },
-            emission_intensity_assessment: { type: "string" },
-            cbam_exposure: { type: "string" },
-          },
-        },
-        anomalies: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-              description: { type: "string" },
-              severity: { type: "string" },
-            },
-          },
-        },
-        reduction_recommendations: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-              description: { type: "string" },
-              estimated_savings_pct: { type: "number" },
-              difficulty: { type: "string" },
-              timeline: { type: "string" },
-              action_type: { type: "string" },
-            },
-          },
-        },
-        cbam_guidance: { type: "string" },
-      },
-    };
+You MUST return a JSON object with ALL of these fields populated. DO NOT leave any array empty.
+
+Return ONLY valid JSON matching this exact structure. Replace ALL placeholder values with your ACTUAL analysis — do not copy the example values literally:
+{
+  "overall_summary": "<your actual 2-3 sentence analysis>",
+  "compliance_status": {
+    "level": "<choose one: good | warning | critical — based on actual risk>",
+    "summary": "<your actual one-sentence compliance assessment>",
+    "cbam_risk_level": "<choose one: low | medium | high — based on actual CBAM exposure>"
+  },
+  "key_metrics": {
+    "largest_scope": "<which scope dominates and why>",
+    "emission_intensity_assessment": "<your actual intensity assessment>",
+    "cbam_exposure": "<your actual CBAM exposure assessment>"
+  },
+  "anomalies": [
+    {"title": "<actual anomaly 1>", "description": "<detailed explanation>", "severity": "<low|medium|high>"},
+    {"title": "<actual anomaly 2>", "description": "<detailed explanation>", "severity": "<low|medium|high>"}
+  ],
+  "reduction_recommendations": [
+    {"title": "<actual rec 1>", "description": "<specific action>", "estimated_savings_pct": <number>, "difficulty": "<low|medium|hard>", "timeline": "<timeframe>", "action_type": "EMISSIONS"},
+    {"title": "<actual rec 2>", "description": "<specific action>", "estimated_savings_pct": <number>, "difficulty": "<low|medium|hard>", "timeline": "<timeframe>", "action_type": "PLANNER"},
+    {"title": "<actual rec 3>", "description": "<specific action>", "estimated_savings_pct": <number>, "difficulty": "<low|medium|hard>", "timeline": "<timeframe>", "action_type": "CBAM"}
+  ],
+  "cbam_guidance": "<your actual CBAM guidance paragraph>"
+}
+
+RULES (strictly enforced):
+- anomalies MUST have at least 2 real items. For new users: flag missing emissions data and missing CBAM setup
+- reduction_recommendations MUST have exactly 3 real items with specific actionable advice
+- compliance_status.level MUST reflect the actual data — use "warning" or "critical" if there are real risks
+- action_type must be one of: PLANNER, CBAM, EMISSIONS
+- difficulty must be one of: low, medium, hard`;
+
+    const schema = null; // schema enforcement handled by prompt structure
 
     try {
-      const result = await db.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
-      setInsights(result);
+      const result = await callLLM(prompt, schema);
+      // If backend couldn't parse JSON and returned raw_response, try again client-side
+      let parsedInsights = null;
+      if (result.raw_response || result.response) {
+        const raw = result.raw_response || result.response;
+        try {
+          const cleaned = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+          parsedInsights = JSON.parse(cleaned);
+        } catch {
+          parsedInsights = result; // show raw fallback
+        }
+      } else {
+        parsedInsights = result;
+      }
+      setInsights(parsedInsights);
+      localStorage.setItem("ai_insights", JSON.stringify(parsedInsights));
     } catch (e) {
-      setError("Failed to generate insights. Please check your API key or try again.");
+      setError(e.message || "Failed to generate insights. Please check your API key or try again.");
     } finally {
       setLoading(false);
     }
@@ -270,12 +289,14 @@ For compliance_status.level: use exactly one of: "good", "warning", or "critical
     : null;
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
+    <div className="h-screen flex flex-col">
+      <div className="flex-1 overflow-auto">
+        <div className="p-6 lg:p-8 max-w-[1400px] mx-auto h-full flex flex-col">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-purple-600" />
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-primary" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">AI Insights</h1>
@@ -292,16 +313,37 @@ For compliance_status.level: use exactly one of: "good", "warning", or "critical
         </button>
       </div>
 
-
+      {/* Error Banner */}
+      {error && !loading && (
+        <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+          <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-red-700">Analysis Failed</p>
+            <p className="text-xs text-red-600 mt-1">{error}</p>
+            {error.includes("429") ? (
+              <p className="text-xs text-amber-600 mt-2 font-medium">
+                ⏳ Rate limit hit. Wait ~30 seconds and try again.
+              </p>
+            ) : (error.toLowerCase().includes("api key") || error.toLowerCase().includes("groq")) ? (
+              <p className="text-xs text-red-500 mt-2 font-medium">
+                → Add a valid Groq API key to <code className="bg-red-100 px-1 rounded">backend/.env</code> as{" "}
+                <code className="bg-red-100 px-1 rounded">GROQ_API_KEY=your_key_here</code>, then restart the backend.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* Empty state */}
       {!insights && !loading && !error && (
-        <div className="border-2 border-dashed border-border rounded-xl py-20 text-center">
-          <Sparkles className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-foreground">AI-Powered Analysis</h3>
-          <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-            Click <strong>Generate Insights</strong> to analyse your emissions and CBAM data and get tailored recommendations.
-          </p>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="border-2 border-dashed border-border rounded-xl py-16 px-8 text-center max-w-md">
+            <Sparkles className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground">AI-Powered Analysis</h3>
+            <p className="text-sm text-muted-foreground mt-2">
+              Click <strong>Generate Insights</strong> to analyse your emissions and CBAM data and get tailored recommendations.
+            </p>
+          </div>
         </div>
       )}
 
@@ -317,17 +359,6 @@ For compliance_status.level: use exactly one of: "good", "warning", or "critical
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Error state */}
-      {error && !loading && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-red-700">Analysis failed</p>
-            <p className="text-xs text-red-600 mt-0.5">{error}</p>
-          </div>
         </div>
       )}
 
@@ -347,7 +378,6 @@ For compliance_status.level: use exactly one of: "good", "warning", or "critical
 
           {/* Compliance status + key metrics */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* Compliance */}
             {insights.compliance_status && complianceCfg && (
               <div className={`bg-card rounded-xl p-5 ${complianceCfg.style}`}>
                 <div className="flex items-center gap-2 mb-2">
@@ -366,7 +396,6 @@ For compliance_status.level: use exactly one of: "good", "warning", or "critical
               </div>
             )}
 
-            {/* Key metrics */}
             {insights.key_metrics && (
               <div className="bg-card border border-border rounded-xl p-5 space-y-3">
                 <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -390,7 +419,6 @@ For compliance_status.level: use exactly one of: "good", "warning", or "critical
 
           {/* Anomalies + Recommendations */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* Anomalies */}
             <div className="bg-card border border-border rounded-xl p-5">
               <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
                 <AlertTriangle className="w-4 h-4 text-amber-500" />
@@ -413,7 +441,6 @@ For compliance_status.level: use exactly one of: "good", "warning", or "critical
               </div>
             </div>
 
-            {/* Reduction Recommendations */}
             <div className="bg-card border border-border rounded-xl p-5">
               <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
                 <TrendingDown className="w-4 h-4 text-primary" />
@@ -459,6 +486,8 @@ For compliance_status.level: use exactly one of: "good", "warning", or "critical
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

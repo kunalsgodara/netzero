@@ -17,14 +17,48 @@ router = APIRouter(prefix="/api/v1/emission-activities", tags=["emission-activit
 factors_router = APIRouter(prefix="/api/v1/emission-factors", tags=["emission-factors"])
 
 
-@router.get("", response_model=List[EmissionActivityResponse])
+from typing import List
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, UploadFile, File, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config.database import get_db
+from app.models.user import User
+from app.schemas.emission import EmissionActivityCreate, EmissionActivityUpdate, EmissionActivityResponse, EmissionFactorResponse
+from app.middleware.auth import get_current_user
+from app.services.emission_service import (
+    list_activities, create_activity, update_activity,
+    delete_activity, bulk_import_csv, list_emission_factors, list_cbam_factors,
+)
+
+router = APIRouter(prefix="/api/v1/emission-activities", tags=["emission-activities"])
+factors_router = APIRouter(prefix="/api/v1/emission-factors", tags=["emission-factors"])
+
+
+@router.get("")
 async def list_emission_activities(
-    order_by: str = "-created_date", limit: int = 200,
-    scope: str = None, category: str = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(4, ge=1, le=10000),
+    order_by: str = "-created_date",
+    scope: str = None,
+    category: str = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await list_activities(current_user.id, order_by, limit, scope, category, db)
+    """List emission activities with pagination. Returns newest first by default."""
+    activities, total = await list_activities(current_user.id, order_by, page, page_size, scope, category, db)
+    total_pages = (total + page_size - 1) // page_size
+    
+    return {
+        "items": [EmissionActivityResponse.model_validate(a) for a in activities],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+        "has_next": page < total_pages,
+        "has_prev": page > 1,
+    }
 
 
 @router.post("", response_model=EmissionActivityResponse, status_code=201)

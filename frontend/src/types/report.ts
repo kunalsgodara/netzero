@@ -103,3 +103,13 @@ export interface ReportAggregation {
   cbam_import_count: number;
   pending_declarations: number;
 }
+
+export interface PaginatedReportsResponse {
+  items: Report[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}

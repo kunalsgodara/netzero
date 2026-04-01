@@ -4,7 +4,7 @@ from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 from fastapi import HTTPException
 
 from app.models.report import Report
@@ -12,7 +12,15 @@ from app.schemas.report import ReportCreate, ReportUpdate, ReportGenerateRequest
 from app.services.report_aggregation_service import build_aggregation
 
 
-async def list_reports(user_id: UUID, order_by: str, limit: int, db: AsyncSession):
+async def list_reports(user_id: UUID, order_by: str, page: int, page_size: int, db: AsyncSession):
+    """List reports with pagination. Returns (reports, total_count)."""
+    
+    # Count total
+    count_query = select(func.count(Report.id)).where(Report.user_id == user_id)
+    count_result = await db.execute(count_query)
+    total = count_result.scalar() or 0
+    
+    # Build query with ordering
     query = select(Report).where(Report.user_id == user_id)
     if order_by.startswith("-"):
         col = getattr(Report, order_by[1:], Report.created_date)
@@ -20,8 +28,15 @@ async def list_reports(user_id: UUID, order_by: str, limit: int, db: AsyncSessio
     else:
         col = getattr(Report, order_by, Report.created_date)
         query = query.order_by(col)
-    result = await db.execute(query.limit(limit))
-    return result.scalars().all()
+    
+    # Apply pagination
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+    
+    result = await db.execute(query)
+    reports = result.scalars().all()
+    
+    return reports, total
 
 
 async def create_report(user_id: UUID, data: ReportCreate, db: AsyncSession):

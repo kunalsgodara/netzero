@@ -1,17 +1,16 @@
 import React, { useState, useMemo, useCallback } from "react";
 import {
   FileText, Plus, Download, Send, Trash2, FileSpreadsheet,
-  Calendar, Filter, ChevronDown, X, Loader2, Eye,
+  Calendar, Filter, ChevronDown, X, Loader2, Eye, ChevronLeft, ChevronRight,
 } from "lucide-react";
+
 import { format, subMonths, startOfMonth } from "date-fns";
 import Select from "@/components/ui/Select";
 import {
   useReports, useGenerateReport, useUpdateReport,
-  useDeleteReport, useReportData,
+  useDeleteReport,
 } from "@/hooks/useReports";
 import { reportService } from "@/services/reportService";
-import { generateReportPdf } from "@/utils/reportPdfGenerator";
-import { exportToCSV, exportToXLS } from "@/utils/reportExportUtils";
 
 const TYPE_LABELS = {
   secr: "SECR Report",
@@ -60,9 +59,19 @@ export default function Reports() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [downloadingId, setDownloadingId] = useState(null);
   const [exportingId, setExportingId] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // ── Queries & Mutations ───────────────────────────────────────────────
-  const { data: reports = [], isLoading } = useReports();
+  const { data: reportsData, isLoading } = useReports(currentPage, 3);
+  const reports = reportsData?.items || [];
+  const pagination = {
+    page: reportsData?.page || 1,
+    total: reportsData?.total || 0,
+    totalPages: reportsData?.total_pages || 1,
+    hasNext: reportsData?.has_next || false,
+    hasPrev: reportsData?.has_prev || false,
+  };
+  
   const generateMutation = useGenerateReport();
   const updateMutation = useUpdateReport();
   const deleteMutation = useDeleteReport();
@@ -101,36 +110,34 @@ export default function Reports() {
     });
     setShowCreate(false);
     setForm({ title: "", type: "secr", period: "" });
+    setCurrentPage(1); // Reset to first page after creating
   }, [form, dateRange, selectedPreset, customStart, customEnd, generateMutation]);
 
   const handleDownloadPdf = useCallback(async (report) => {
     setDownloadingId(report.id);
     try {
-      const data = await reportService.getReportData(report.id);
-      generateReportPdf(report.type, data, {
-        title: report.title,
-        type: report.type,
-        period: report.period,
-        status: report.status,
-        createdDate: report.created_date
-          ? format(new Date(report.created_date), "d MMMM yyyy")
-          : format(new Date(), "d MMMM yyyy"),
-      });
+      await reportService.downloadReportPdf(report);
     } catch (err) {
-      console.error("PDF generation failed:", err);
+      console.error("PDF download failed:", err);
+      alert(`PDF generation failed: ${err.message || "Unknown error"}`);
+    } finally {
+      setDownloadingId(null);
     }
-    setDownloadingId(null);
   }, []);
+
 
   const handleExport = useCallback(async (report, exportType) => {
     setExportingId(report.id);
     try {
-      const data = await reportService.getReportData(report.id);
+      const [data, exportUtils] = await Promise.all([
+        reportService.getReportData(report.id),
+        import("@/utils/reportExportUtils"),
+      ]);
       const meta = { title: report.title, type: TYPE_LABELS[report.type] || report.type, period: report.period };
       if (exportType === "csv") {
-        exportToCSV(data, meta);
+        exportUtils.exportToCSV(data, meta);
       } else {
-        exportToXLS(data, meta);
+        exportUtils.exportToXLS(data, meta);
       }
     } catch (err) {
       console.error("Export failed:", err);
@@ -156,12 +163,14 @@ export default function Reports() {
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
-    <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
+    <div className="h-screen flex flex-col">
+      <div className="flex-1 overflow-auto">
+        <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-            <FileText className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <FileText className="w-5 h-5 text-primary" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">Reports</h1>
@@ -357,6 +366,42 @@ export default function Reports() {
           ))}
         </div>
       )}
+        </div>
+      </div>
+
+      {/* Pagination Controls - Sticky footer */}
+      {!showCreate && pagination.totalPages > 1 && (
+        <div className="bg-background">
+          <div className="p-3 lg:p-4 max-w-[1400px] mx-auto">
+            <div className="bg-card border border-border rounded-xl px-4 py-2">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-muted-foreground">
+                  Showing {filteredReports.length > 0 ? ((pagination.page - 1) * 3 + 1) : 0} to {Math.min(pagination.page * 3, pagination.total)} of {pagination.total} reports
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => p - 1)}
+                    disabled={!pagination.hasPrev}
+                    className="inline-flex items-center px-3 py-1.5 border border-border rounded-lg text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-background"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Previous
+                  </button>
+                  <span className="text-xs font-medium text-muted-foreground px-2">
+                    Page {pagination.page} of {pagination.totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => p + 1)}
+                    disabled={!pagination.hasNext}
+                    className="inline-flex items-center px-3 py-1.5 border border-border rounded-lg text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-background"
+                  >
+                    Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -367,7 +412,7 @@ function ReportCard({ report: r, downloadingId, exportingId, onDownloadPdf, onEx
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 space-y-4 hover:shadow-md transition-all duration-200 group">
+    <div className="bg-card border border-border rounded-xl p-4 space-y-3 hover:shadow-md transition-all duration-200 group">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
@@ -382,14 +427,14 @@ function ReportCard({ report: r, downloadingId, exportingId, onDownloadPdf, onEx
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <div className="bg-muted/30 rounded-lg p-2.5">
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="bg-muted/30 rounded-lg p-2">
           <p className="text-muted-foreground text-[10px] uppercase tracking-wide">Emissions</p>
           <p className="font-bold text-foreground mt-0.5">
             {r.total_emissions_tco2e?.toFixed(1) || "0.0"} <span className="text-muted-foreground font-normal">tCO₂e</span>
           </p>
         </div>
-        <div className="bg-muted/30 rounded-lg p-2.5">
+        <div className="bg-muted/30 rounded-lg p-2">
           <p className="text-muted-foreground text-[10px] uppercase tracking-wide">CBAM Charges</p>
           <p className="font-bold text-foreground mt-0.5">
             €{r.total_cbam_charge_eur?.toLocaleString() || "0"}
@@ -445,13 +490,13 @@ function ReportCard({ report: r, downloadingId, exportingId, onDownloadPdf, onEx
                     onClick={() => { onExport(r, "csv"); setShowExportMenu(false); }}
                     className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors"
                   >
-                    📄 CSV
+                    CSV
                   </button>
                   <button
                     onClick={() => { onExport(r, "xlsx"); setShowExportMenu(false); }}
                     className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors"
                   >
-                    📊 Excel (XLSX)
+                    Excel (XLSX)
                   </button>
                 </div>
               )}
