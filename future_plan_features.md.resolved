@@ -1,0 +1,27 @@
+# Future Plan & Features
+
+This document serves as a roadmap for deferred tasks, enhancements, and planned features that are not required for the immediate MVP but are scheduled for future development.
+
+## 1. Live Market Data Integration (CBAM)
+**Description:** Automate the fetching of the European Union Allowance (EUA) carbon price for CBAM calculations using a live financial market API.
+**Current State:** The backend (`GET /api/v1/cbam-imports/eu-ets-price`) returns a static, realistic simulated price (e.g., €75.40/t) to ensure the application works without requiring paid API keys.
+**Future Implementation:** 
+- Acquire an API key from a reliable financial data provider (e.g., Trading Economics, ICE, or EEX).
+- Update the FastAPI backend route to make an authenticated `httpx.get()` request to the provider.
+- Implement response caching (e.g., Redis or simple in-memory cache) to prevent hitting rate limits, updating the price daily or hourly.
+- Ensure robust error handling that falls back to the last known good price if the API goes down.
+
+---
+
+## 2. AI Assistant Sidebar (Context-Aware Chat)
+**Description:** A persistent, context-aware AI chat assistant accessible throughout the application (not just the AI Insights page). This would allow users to ask follow-up questions about their emissions data, CBAM charges, or compliance status directly in a slide-out drawer.
+**Current State:** Deferred. Not in MVP scope.
+**Future Implementation:**
+- Create a `AIAssistantSidebar.jsx` component that uses the existing `/api/integrations/llm/invoke` backend endpoint.
+- Add a floating trigger button (e.g., bottom-right corner) in `Layout.jsx` that opens the sidebar on all authenticated pages.
+- Pass current page context (e.g., current emissions data) to the LLM prompt so responses are contextually relevant.
+- Persist chat history in component state (session-based, not saved to DB in V1).
+- Style to match the existing sidebar and card design system.
+
+---
+*Note: Add any additional future features, improvements, or refactoring plans to this list as they are discovered.*

@@ -5,5 +5,8 @@ from app.schemas.emission import (
     EmissionFactorResponse,
 )
 from app.schemas.cbam import CBAMImportCreate, CBAMImportUpdate, CBAMImportResponse
-from app.schemas.report import ReportCreate, ReportUpdate, ReportResponse
+from app.schemas.report import (
+    ReportCreate, ReportUpdate, ReportResponse,
+    ReportGenerateRequest, ReportAggregationResponse,
+)
 from app.schemas.integration import LLMInvokeRequest

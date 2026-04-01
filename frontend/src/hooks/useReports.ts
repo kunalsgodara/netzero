@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reportService } from '@/services/reportService';
-import type { ReportCreatePayload } from '@/types/report';
+import type { ReportCreatePayload, ReportGeneratePayload } from '@/types/report';
 
 export const REPORTS_KEY = ['reports'] as const;
 
@@ -19,6 +19,14 @@ export function useCreateReport() {
   });
 }
 
+export function useGenerateReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ReportGeneratePayload) => reportService.generateReport(data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: REPORTS_KEY }),
+  });
+}
+
 export function useUpdateReport() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -33,5 +41,21 @@ export function useDeleteReport() {
   return useMutation({
     mutationFn: (id: string) => reportService.deleteReport(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: REPORTS_KEY }),
+  });
+}
+
+export function useReportData(reportId: string | null) {
+  return useQuery({
+    queryKey: ['report-data', reportId],
+    queryFn: () => reportService.getReportData(reportId!),
+    enabled: !!reportId,
+  });
+}
+
+export function useAggregationPreview(startDate?: string, endDate?: string) {
+  return useQuery({
+    queryKey: ['aggregation-preview', startDate, endDate],
+    queryFn: () => reportService.previewAggregation(startDate, endDate),
+    enabled: true,
   });
 }

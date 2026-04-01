@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Text, CheckConstraint
+from sqlalchemy import Column, String, Float, DateTime, Date, ForeignKey, Text, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.config.database import Base
@@ -18,6 +18,8 @@ class Report(Base):
     total_emissions_tco2e = Column(Float, nullable=True)
     total_cbam_charge_eur = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
     created_date = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
