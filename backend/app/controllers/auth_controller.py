@@ -40,9 +40,10 @@ async def refresh_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    org_id_str = str(user.org_id) if user.org_id else None
     return TokenResponse(
-        access_token=create_access_token(str(user.id)),
-        refresh_token=create_refresh_token(str(user.id)),
+        access_token=create_access_token(str(user.id), org_id=org_id_str),
+        refresh_token=create_refresh_token(str(user.id), org_id=org_id_str),
     )
 
 
@@ -85,7 +86,8 @@ async def google_callback(code: str, state: str = None, db: AsyncSession = Depen
     user = await find_or_create_google_user(
         userinfo["id"], userinfo["email"], userinfo.get("name", ""), db
     )
-    access_token = create_access_token(str(user.id))
+    org_id_str = str(user.org_id) if user.org_id else None
+    access_token = create_access_token(str(user.id), org_id=org_id_str)
     redirect_url = state or settings.frontend_url
     separator = "&" if "?" in redirect_url else "?"
     return RedirectResponse(f"{redirect_url}{separator}access_token={access_token}")

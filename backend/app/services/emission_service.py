@@ -20,7 +20,7 @@ from app.models.emission import EmissionActivity, EmissionFactor
 from app.schemas.emission import EmissionActivityCreate, EmissionActivityUpdate
 
 
-async def list_activities(user_id: UUID, order_by: str, page: int, page_size: int, scope: str, category: str, db: AsyncSession):
+async def list_activities(user_id: UUID, order_by: str, page: int, page_size: int, scope: str, category: str, month: int, year: int, db: AsyncSession):
     """List emission activities with pagination. Returns (activities, total_count)."""
     
     # Build base query
@@ -33,6 +33,12 @@ async def list_activities(user_id: UUID, order_by: str, page: int, page_size: in
     if category:
         query = query.where(EmissionActivity.category == category)
         count_query = count_query.where(EmissionActivity.category == category)
+    if year:
+        query = query.where(func.extract('year', EmissionActivity.activity_date) == year)
+        count_query = count_query.where(func.extract('year', EmissionActivity.activity_date) == year)
+    if month:
+        query = query.where(func.extract('month', EmissionActivity.activity_date) == month)
+        count_query = count_query.where(func.extract('month', EmissionActivity.activity_date) == month)
     
     # Count total
     count_result = await db.execute(count_query)

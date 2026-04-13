@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 import { useNavigate } from "react-router-dom";
-import { Leaf, ArrowRight, BarChart3, ShieldCheck, Sparkles, FileText, Activity, Mail, Lock, User, TrendingDown, Globe } from "lucide-react";
+import { Leaf, ArrowRight, BarChart3, ShieldCheck, Sparkles, FileText, Activity, Mail, Lock, User, TrendingDown, Globe, Building2 } from "lucide-react";
 import { useToast, ToastContainer } from "@/components/ui/Toast";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -74,7 +74,7 @@ export default function Landing() {
   const navigate = useNavigate();
   const [showAuth, setShowAuth] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "", full_name: "" });
+  const [form, setForm] = useState({ email: "", password: "", full_name: "", org_name: "" });
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
@@ -93,6 +93,7 @@ export default function Landing() {
     e.preventDefault();
     const errs = {};
     if (isRegister && !form.full_name.trim()) errs.full_name = true;
+    if (isRegister && !form.org_name.trim()) errs.org_name = true;
     if (!form.email.trim()) errs.email = true;
     if (!form.password) errs.password = true;
     else if (isRegister && form.password.length < 8) {
@@ -111,7 +112,7 @@ export default function Landing() {
     try {
       const endpoint = isRegister ? "/api/auth/register" : "/api/auth/login";
       const body = isRegister
-        ? { email: form.email, password: form.password, full_name: form.full_name }
+        ? { email: form.email, password: form.password, full_name: form.full_name, org_name: form.org_name }
         : { email: form.email, password: form.password };
       const resp = await fetch(`${API_BASE}${endpoint}`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -355,6 +356,18 @@ export default function Landing() {
                       onChange={(e) => { setForm({ ...form, full_name: e.target.value }); clearFieldError("full_name"); }}
                       className={`w-full pl-10 pr-3 py-2.5 rounded-lg text-sm bg-white/5 text-white outline-none focus:ring-2 focus:ring-primary/40 border ${fieldErrors.full_name ? "border-red-500" : "border-white/10"}`}
                       placeholder="John Doe" />
+                  </div>
+                </div>
+              )}
+              {isRegister && (
+                <div>
+                  <label className="text-xs font-medium text-white/50">Organisation Name</label>
+                  <div className="relative mt-1">
+                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                    <input type="text" value={form.org_name}
+                      onChange={(e) => { setForm({ ...form, org_name: e.target.value }); clearFieldError("org_name"); }}
+                      className={`w-full pl-10 pr-3 py-2.5 rounded-lg text-sm bg-white/5 text-white outline-none focus:ring-2 focus:ring-primary/40 border ${fieldErrors.org_name ? "border-red-500" : "border-white/10"}`}
+                      placeholder="Acme Steel Ltd" />
                   </div>
                 </div>
               )}

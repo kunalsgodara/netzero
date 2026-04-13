@@ -8,6 +8,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: Optional[str] = None
+    org_name: str  # Required — creates the org on register
 
 
 class UserLogin(BaseModel):
@@ -19,6 +20,8 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     full_name: Optional[str] = None
+    org_id: Optional[uuid.UUID] = None
+    role: str = "member"
     is_active: bool = True
     created_at: datetime
 
@@ -34,3 +37,4 @@ class TokenResponse(BaseModel):
 
 class TokenData(BaseModel):
     user_id: str
+    org_id: Optional[str] = None

@@ -11,15 +11,18 @@ from app.controllers import (
     emission_controller,
     integration_controller,
     report_controller,
-    cbam_controller,
+    products_controller,
+    ets_price_controller,
+    imports_controller,
+    dashboard_controller,
 )
 
 settings = get_settings()
 
 app = FastAPI(
     title="NetZeroWorks API",
-    description="Carbon compliance platform backend",
-    version="1.0.0",
+    description="Carbon compliance platform backend — UK CBAM + SECR",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -30,13 +33,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── Existing SECR routes ──────────────────────────────────────────
 app.include_router(auth_controller.router)
 app.include_router(organization_controller.router)
 app.include_router(emission_controller.router)
 app.include_router(emission_controller.factors_router)
-app.include_router(cbam_controller.router)
 app.include_router(report_controller.router)
 app.include_router(integration_controller.router)
+
+# ─── UK CBAM routes ────────────────────────────────────────────────
+app.include_router(products_controller.router)
+app.include_router(ets_price_controller.router)
+app.include_router(imports_controller.router)
+app.include_router(imports_controller.threshold_router)
+app.include_router(dashboard_controller.router)
 
 upload_dir = settings.upload_dir
 os.makedirs(upload_dir, exist_ok=True)
@@ -58,72 +68,93 @@ async def shutdown():
 @app.on_event("startup")
 async def startup():
     from app.config.database import Base
-    from app.models import User, Organization, EmissionActivity, EmissionFactor, CBAMImport, Report  # noqa: F401
+    from app.models import (  # noqa: F401
+        User, Organization, EmissionActivity, EmissionFactor, Report,
+        Organisation, UKCBAMProduct, UKETSPrice,
+        Supplier, Import, AuditLog, CBAMReport,
+    )
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # Quick check: if any emission factors exist, skip seeding entirely
+    # ─── Seed DEFRA Scope 1/2/3 factors (idempotent) ───────────────
     from sqlalchemy import select, and_
     async with async_session() as session:
         result = await session.execute(select(EmissionFactor).limit(1))
         if result.scalar_one_or_none():
-            print("[startup] Database already seeded, skipping factor seeding.")
-            return
-
-    # Seed DEFRA Scope 1/2/3 factors (idempotent)
-    try:
-        from app.seeders.defra_factors import DEFRA_FACTORS
-        async with async_session() as session:
-            count = 0
-            for scope, category, source, unit, factor, source_dataset in DEFRA_FACTORS:
-                result = await session.execute(
-                    select(EmissionFactor).where(
-                        and_(
-                            EmissionFactor.scope == scope,
-                            EmissionFactor.category == category,
-                            EmissionFactor.source == source,
+            print("[startup] DEFRA factors already seeded, skipping.")
+        else:
+            try:
+                from app.seeders.defra_factors import DEFRA_FACTORS
+                count = 0
+                for scope, category, source, unit, factor, source_dataset in DEFRA_FACTORS:
+                    result = await session.execute(
+                        select(EmissionFactor).where(
+                            and_(
+                                EmissionFactor.scope == scope,
+                                EmissionFactor.category == category,
+                                EmissionFactor.source == source,
+                            )
                         )
                     )
-                )
-                if result.scalar_one_or_none():
-                    continue
-                session.add(EmissionFactor(
-                    scope=scope, category=category, source=source,
-                    unit=unit, factor=factor, source_dataset=source_dataset,
-                ))
-                count += 1
-            if count > 0:
-                await session.commit()
-                print(f"[startup] Seeded {count} DEFRA factors.")
-    except Exception as e:
-        print(f"[startup] DEFRA seeding skipped: {e}")
+                    if result.scalar_one_or_none():
+                        continue
+                    session.add(EmissionFactor(
+                        scope=scope, category=category, source=source,
+                        unit=unit, factor=factor, source_dataset=source_dataset,
+                    ))
+                    count += 1
+                if count > 0:
+                    await session.commit()
+                    print(f"[startup] Seeded {count} DEFRA factors.")
+            except Exception as e:
+                print(f"[startup] DEFRA seeding skipped: {e}")
 
-    # Seed CBAM factors (idempotent — skips if already seeded)
+    # ─── Seed UK CBAM Products (idempotent) ────────────────────────
     try:
-        from app.seeders.cbam_factors import CBAM_FACTORS
+        from app.seeders.uk_cbam_products_seed import UK_CBAM_PRODUCTS
         async with async_session() as session:
-            count = 0
-            for hscn_code, cat_key, cat_label, description, direct, indirect, total in CBAM_FACTORS:
-                result = await session.execute(
-                    select(EmissionFactor).where(
-                        and_(
-                            EmissionFactor.scope == "CBAM",
-                            EmissionFactor.category == cat_key,
-                            EmissionFactor.source == str(hscn_code),
-                        )
-                    )
-                )
-                if result.scalar_one_or_none():
-                    continue
-                session.add(EmissionFactor(
-                    scope="CBAM", category=cat_key, source=str(hscn_code),
-                    unit="tCO2e/tonne", factor=total,
-                    source_dataset=f"EU CBAM Default Values 2024 | {cat_label} | {description} | Direct: {direct} Indirect: {indirect}",
-                ))
-                count += 1
-            if count > 0:
-                await session.commit()
-                print(f"[startup] Seeded {count} CBAM factors.")
+            result = await session.execute(select(UKCBAMProduct).limit(1))
+            if result.scalar_one_or_none():
+                print("[startup] UK CBAM products already seeded, skipping.")
+            else:
+                count = 0
+                for code, desc, sector, ptype, intensity, valid_from, notes in UK_CBAM_PRODUCTS:
+                    session.add(UKCBAMProduct(
+                        commodity_code=code,
+                        description=desc,
+                        sector=sector,
+                        product_type=ptype,
+                        default_intensity=intensity,
+                        valid_from=valid_from,
+                        includes_indirect=False,  # Always FALSE until 2029
+                        notes=notes,
+                    ))
+                    count += 1
+                if count > 0:
+                    await session.commit()
+                    print(f"[startup] Seeded {count} UK CBAM products.")
     except Exception as e:
-        print(f"[startup] CBAM seeding skipped: {e}")
+        print(f"[startup] UK CBAM product seeding skipped: {e}")
+
+    # ─── Seed UK ETS Prices (idempotent) ───────────────────────────
+    try:
+        from app.seeders.uk_ets_prices_seed import UK_ETS_PRICES
+        async with async_session() as session:
+            result = await session.execute(select(UKETSPrice).limit(1))
+            if result.scalar_one_or_none():
+                print("[startup] UK ETS prices already seeded, skipping.")
+            else:
+                count = 0
+                for quarter, price, source in UK_ETS_PRICES:
+                    session.add(UKETSPrice(
+                        quarter=quarter,
+                        price_gbp=price,
+                        source=source,
+                    ))
+                    count += 1
+                if count > 0:
+                    await session.commit()
+                    print(f"[startup] Seeded {count} UK ETS prices.")
+    except Exception as e:
+        print(f"[startup] UK ETS price seeding skipped: {e}")

@@ -43,14 +43,21 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-def create_access_token(user_id: str, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(user_id: str, org_id: Optional[str] = None, expires_delta: Optional[timedelta] = None) -> str:
+    """Create JWT access token with user_id and org_id claims."""
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
-    return jwt.encode({"sub": user_id, "exp": expire, "type": "access"}, settings.secret_key, algorithm=settings.algorithm)
+    payload = {"sub": user_id, "exp": expire, "type": "access"}
+    if org_id:
+        payload["org_id"] = org_id
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, org_id: Optional[str] = None) -> str:
     expire = datetime.utcnow() + timedelta(days=settings.refresh_token_expire_days)
-    return jwt.encode({"sub": user_id, "exp": expire, "type": "refresh"}, settings.secret_key, algorithm=settings.algorithm)
+    payload = {"sub": user_id, "exp": expire, "type": "refresh"}
+    if org_id:
+        payload["org_id"] = org_id
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
 def decode_token(token: str) -> dict:
@@ -78,6 +85,13 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or inactive")
+
+    # Eagerly touch all columns we need before detaching from the session.
+    # This prevents DetachedInstanceError when cached user is used in other requests.
+    _ = user.org_id, user.id, user.email, user.full_name, user.role, user.is_active
+
+    # Expunge from session so the cached object won't try to lazy-load
+    db.expunge(user)
 
     _cache_user(user_id, user)
     return user

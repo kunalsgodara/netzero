@@ -8,7 +8,7 @@ import { createPageUrl } from "@/utils/routes";
 
 const navItems = [
   { name: "Dashboard",       icon: LayoutDashboard, page: "Dashboard" },
-  { name: "CBAM Manager",    icon: ShieldCheck,     page: "CBAMManager" },
+  { name: "UK CBAM",         icon: ShieldCheck,     page: "CBAMManager" },
   { name: "Emissions",       icon: Activity,        page: "Emissions" },
   { name: "Reports",         icon: FileText,        page: "Reports" },
   { name: "AI Insights",     icon: Sparkles,        page: "AIInsights" },

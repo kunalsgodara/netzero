@@ -31,9 +31,11 @@ class Settings(BaseSettings):
     # File uploads
     upload_dir: str = "./uploads"
 
-    class Config:
-        env_file = _ENV_FILE
-        case_sensitive = False
+    model_config = {
+        "env_file": _ENV_FILE,
+        "case_sensitive": False,
+        "extra": "ignore"
+    }
 
 
 @lru_cache()

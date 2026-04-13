@@ -23,6 +23,8 @@ export default function Emissions() {
   const [editing, setEditing] = useState(null);
   const [scopeFilter, setScopeFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
   const [form, setForm] = useState(EMPTY_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -52,7 +54,7 @@ export default function Emissions() {
   }, [rawFactors]);
 
   const { data: activitiesData } = useQuery({
-    queryKey: ["emissions", currentPage, scopeFilter, categoryFilter],
+    queryKey: ["emissions", currentPage, scopeFilter, categoryFilter, monthFilter, yearFilter],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(currentPage),
@@ -61,6 +63,8 @@ export default function Emissions() {
       });
       if (scopeFilter !== "all") params.set("scope", scopeFilter);
       if (categoryFilter !== "all") params.set("category", categoryFilter);
+      if (monthFilter !== "all") params.set("month", monthFilter);
+      if (yearFilter !== "all") params.set("year", yearFilter);
       
       const res = await fetch(`/api/v1/emission-activities?${params.toString()}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
@@ -359,6 +363,40 @@ export default function Emissions() {
                 />
               </div>
             )}
+            <div className="w-36">
+              <CustomSelect
+                value={monthFilter}
+                onChange={(val) => { setMonthFilter(val); setCurrentPage(1); }}
+                options={[
+                  { value: "all", label: "All Months" },
+                  { value: "1", label: "January" },
+                  { value: "2", label: "February" },
+                  { value: "3", label: "March" },
+                  { value: "4", label: "April" },
+                  { value: "5", label: "May" },
+                  { value: "6", label: "June" },
+                  { value: "7", label: "July" },
+                  { value: "8", label: "August" },
+                  { value: "9", label: "September" },
+                  { value: "10", label: "October" },
+                  { value: "11", label: "November" },
+                  { value: "12", label: "December" }
+                ]}
+              />
+            </div>
+            <div className="w-32">
+              <CustomSelect
+                value={yearFilter}
+                onChange={(val) => { setYearFilter(val); setCurrentPage(1); }}
+                options={[
+                  { value: "all", label: "All Years" },
+                  ...Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(year => ({
+                    value: String(year),
+                    label: String(year)
+                  }))
+                ]}
+              />
+            </div>
           </div>
 
           <div className="bg-card border border-border rounded-xl overflow-hidden">

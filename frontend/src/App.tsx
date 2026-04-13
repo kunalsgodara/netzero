@@ -8,6 +8,8 @@ import PageNotFound from '@/components/ui/PageNotFound';
 import Benchmarking from './pages/Benchmarking';
 import ScenarioPlanner from './pages/ScenarioPlanner';
 import Landing from './pages/Landing';
+import AddImportPage from './pages/AddImportPage';
+import ImportDetailPage from './pages/ImportDetailPage';
 
 const { Pages, Layout } = pagesConfig;
 
@@ -36,6 +38,9 @@ function AuthenticatedApp() {
           element={<LayoutWrapper currentPageName={path}><Page /></LayoutWrapper>}
         />
       ))}
+      {/* UK CBAM sub-pages — keep CBAMManager highlighted in sidebar */}
+      <Route path="/AddImport" element={<LayoutWrapper currentPageName="CBAMManager"><AddImportPage /></LayoutWrapper>} />
+      <Route path="/ImportDetail/:id" element={<LayoutWrapper currentPageName="CBAMManager"><ImportDetailPage /></LayoutWrapper>} />
       <Route path="/Benchmarking" element={<LayoutWrapper currentPageName="Benchmarking"><Benchmarking /></LayoutWrapper>} />
       <Route path="/ScenarioPlanner" element={<LayoutWrapper currentPageName="ScenarioPlanner"><ScenarioPlanner /></LayoutWrapper>} />
       <Route path="*" element={<PageNotFound />} />
