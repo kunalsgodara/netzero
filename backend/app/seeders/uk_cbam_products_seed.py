@@ -10,8 +10,26 @@ Format: (commodity_code, description, sector, product_type, default_intensity, v
 
 from datetime import date
 
+
+def validate_cn_code(cn_code: str) -> bool:
+    """
+    Validate that CN code is exactly 8 digits.
+    
+    Args:
+        cn_code: The CN code to validate
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    # Remove dots if present (e.g., "7601.10.00" -> "76011000")
+    clean_code = cn_code.replace(".", "")
+    
+    # Check if exactly 8 digits
+    return len(clean_code) == 8 and clean_code.isdigit()
+
+
 UK_CBAM_PRODUCTS = [
-    # ─── Aluminium ──────────────────────────────────────────────────
+    
     ("7601.10.00", "Unwrought aluminium, not alloyed", "aluminium", "simple", 8.600, date(2027, 1, 1),
      "Primary aluminium — direct emissions only"),
     ("7601.20.00", "Unwrought aluminium alloys", "aluminium", "complex", 8.600, date(2027, 1, 1),
@@ -27,7 +45,7 @@ UK_CBAM_PRODUCTS = [
     ("7607.11.00", "Aluminium foil, not backed, rolled, thickness ≤ 0.2mm", "aluminium", "complex", 9.1500, date(2027, 1, 1),
      None),
 
-    # ─── Cement ─────────────────────────────────────────────────────
+    
     ("2523.10.00", "Cement clinkers", "cement", "simple", 0.8400, date(2027, 1, 1),
      "Portland cement clinker — primary precursor"),
     ("2523.21.00", "White Portland cement", "cement", "complex", 0.6200, date(2027, 1, 1),
@@ -39,7 +57,7 @@ UK_CBAM_PRODUCTS = [
     ("2523.90.00", "Other hydraulic cements", "cement", "complex", 0.5500, date(2027, 1, 1),
      "Blended / composite cements — lower default intensity"),
 
-    # ─── Fertiliser ─────────────────────────────────────────────────
+    
     ("2808.00.00", "Nitric acid; sulphonitric acids", "fertiliser", "simple", 2.6900, date(2027, 1, 1),
      "Key precursor for nitrogen fertilisers"),
     ("2814.10.00", "Anhydrous ammonia", "fertiliser", "simple", 2.4040, date(2027, 1, 1),
@@ -53,11 +71,11 @@ UK_CBAM_PRODUCTS = [
     ("3105.30.00", "Diammonium hydrogenorthophosphate (DAP)", "fertiliser", "complex", 1.8500, date(2027, 1, 1),
      None),
 
-    # ─── Hydrogen ───────────────────────────────────────────────────
+    
     ("2804.10.00", "Hydrogen", "hydrogen", "simple", 11.8940, date(2027, 1, 1),
      "Grey hydrogen (SMR) default — highest CBAM sector intensity"),
 
-    # ─── Iron & Steel ───────────────────────────────────────────────
+    
     ("7201.10.00", "Non-alloy pig iron, Mn < 0.5%", "steel", "simple", 1.5100, date(2027, 1, 1),
      "Blast furnace pig iron"),
     ("7201.20.00", "Non-alloy pig iron, Mn ≥ 0.5%", "steel", "simple", 1.5100, date(2027, 1, 1),
@@ -103,3 +121,21 @@ UK_CBAM_PRODUCTS = [
     ("7318.15.00", "Bolts/screws with hexagonal head", "steel", "complex", 2.5000, date(2027, 1, 1),
      "Fasteners — downstream steel product"),
 ]
+
+
+# Validate all CN codes on module load
+def _validate_all_cn_codes():
+    """Validate that all CN codes in UK_CBAM_PRODUCTS are exactly 8 digits."""
+    invalid_codes = []
+    for product in UK_CBAM_PRODUCTS:
+        cn_code = product[0]
+        if not validate_cn_code(cn_code):
+            invalid_codes.append(cn_code)
+    
+    if invalid_codes:
+        raise ValueError(
+            f"Invalid CN codes found (must be exactly 8 digits): {', '.join(invalid_codes)}"
+        )
+
+# Run validation when module is imported
+_validate_all_cn_codes()

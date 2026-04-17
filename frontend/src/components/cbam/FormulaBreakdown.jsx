@@ -1,13 +1,4 @@
-/**
- * FormulaBreakdown — Section 6.1
- * Shows the full UK CBAM calculation formula step by step.
- *
- * Renders:
- *   Quantity × Intensity = Embedded Emissions
- *   Embedded Emissions − Deduction = Net Emissions
- *   Net Emissions × UK ETS Rate = CBAM Liability
- *   [green box] "vs Default: you save £X by using verified data"
- */
+
 import DataSourceBadge from "./DataSourceBadge";
 import SavingsCallout from "./SavingsCallout";
 
@@ -47,13 +38,13 @@ export default function FormulaBreakdown({
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-foreground/80 uppercase tracking-wider">Formula Breakdown</h3>
         <DataSourceBadge source={data_source} />
       </div>
 
-      {/* Returned goods exemption */}
+      
       {isReturned && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
           <span className="text-lg">🔄</span>
@@ -64,9 +55,9 @@ export default function FormulaBreakdown({
         </div>
       )}
 
-      {/* Formula steps */}
+      
       <div className="space-y-3 bg-card shadow-sm rounded-xl p-4 border border-border/50">
-        {/* Step 1: Embedded Emissions */}
+        
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Quantity</span>
           <span className="font-mono text-foreground">{fmt(qty, 1)} tonnes</span>
@@ -85,7 +76,7 @@ export default function FormulaBreakdown({
           <span className="font-mono font-semibold text-foreground">{fmt(embedded, 4)} tCO₂e</span>
         </div>
 
-        {/* Step 2: Deduction */}
+        
         {deduction > 0 && (
           <>
             <div className="flex items-center justify-between text-sm mt-2">
@@ -99,7 +90,7 @@ export default function FormulaBreakdown({
           </>
         )}
 
-        {/* Step 3: Liability */}
+        
         <div className="flex items-center justify-between text-sm mt-2">
           <span className="text-muted-foreground">× UK ETS Rate</span>
           <span className="font-mono text-foreground">{gbp(etsRate)}/tCO₂e</span>
@@ -112,7 +103,7 @@ export default function FormulaBreakdown({
         </div>
       </div>
 
-      {/* Default vs Actual comparison */}
+      
       {cbam_liability_default_gbp && !isReturned && (
         <div className="grid grid-cols-2 gap-3">
           <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
@@ -126,10 +117,10 @@ export default function FormulaBreakdown({
         </div>
       )}
 
-      {/* Savings callout */}
+      
       <SavingsCallout data_source={data_source} potential_saving_gbp={potential_saving_gbp} />
 
-      {/* Indirect emissions notice */}
+      
       <div className="flex items-center gap-2 p-2.5 rounded-lg bg-card border border-border/50 text-[11px] text-muted-foreground/70">
         <span>ℹ️</span>
         <span>Indirect emissions excluded — included from 2029 per UK CBAM regulations.</span>

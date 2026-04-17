@@ -1,7 +1,4 @@
-/**
- * ImportDetailPage — /ImportDetail/:id
- * Full record view with formula breakdown, audit timeline, and edit mode.
- */
+
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -90,8 +87,8 @@ export default function ImportDetailPage() {
     : imp.emissions_intensity_default;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="p-4 max-w-5xl mx-auto space-y-4">
+      
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate("/CBAMManager")} className="p-2 rounded-lg bg-background hover:bg-muted transition-colors">
@@ -117,10 +114,10 @@ export default function ImportDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Import fields */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
         <div className="space-y-4">
-          <div className="bg-card shadow-sm rounded-xl border border-border p-5 space-y-3">
+          <div className="bg-card shadow-sm rounded-xl border border-border p-4 space-y-3">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Import Information</h3>
 
             {editing ? (
@@ -177,13 +174,41 @@ export default function ImportDetailPage() {
                   <span className="text-muted-foreground">Data Source</span>
                   <DataSourceBadge source={imp.data_source} />
                 </div>
+
+                {/* Installation Fields */}
+                {(imp.installation_name || imp.installation_id || imp.production_route) && (
+                  <>
+                    <div className="border-t border-border my-3" />
+                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
+                      Installation Details
+                    </h4>
+                    {imp.installation_name && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Installation Name</span>
+                        <span className="text-foreground font-medium">{imp.installation_name}</span>
+                      </div>
+                    )}
+                    {imp.installation_id && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Installation ID</span>
+                        <span className="text-foreground font-medium font-mono">{imp.installation_id}</span>
+                      </div>
+                    )}
+                    {imp.production_route && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Production Route</span>
+                        <span className="text-foreground font-medium">{imp.production_route}</span>
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
           </div>
         </div>
 
-        {/* Right: Formula breakdown */}
-        <div className="bg-card shadow-sm rounded-xl border border-border p-5">
+        
+        <div className="bg-card shadow-sm rounded-xl border border-border p-4">
           <FormulaBreakdown
             quantity_tonnes={imp.quantity_tonnes}
             emissions_intensity={intensity}
@@ -202,9 +227,9 @@ export default function ImportDetailPage() {
         </div>
       </div>
 
-      {/* Audit Timeline */}
-      <div className="bg-card shadow-sm rounded-xl border border-border p-5">
-        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">Audit Trail</h3>
+      
+      <div className="bg-card shadow-sm rounded-xl border border-border p-4">
+        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Audit Trail</h3>
 
         {!auditEntries || auditEntries.length === 0 ? (
           <p className="text-sm text-muted-foreground/70">No audit entries found</p>
@@ -212,7 +237,7 @@ export default function ImportDetailPage() {
           <div className="space-y-0">
             {auditEntries.map((entry, idx) => (
               <div key={entry.id} className="flex gap-4">
-                {/* Timeline line */}
+                
                 <div className="flex flex-col items-center">
                   <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
                     entry.action === "created" ? "bg-emerald-400" :
@@ -222,7 +247,7 @@ export default function ImportDetailPage() {
                   }`} />
                   {idx < auditEntries.length - 1 && <div className="w-px flex-1 bg-muted my-1" />}
                 </div>
-                {/* Content */}
+                
                 <div className="pb-4">
                   <div className="flex items-center gap-2 text-sm">
                     <span className={`font-semibold capitalize ${
@@ -236,7 +261,7 @@ export default function ImportDetailPage() {
                     <Clock className="w-3 h-3" />
                     {formatDate(entry.created_at)}
                   </p>
-                  {/* Show changed fields */}
+                  
                   {entry.action === "updated" && entry.old_data && entry.new_data && (
                     <div className="mt-2 space-y-1">
                       {Object.keys(entry.new_data).filter(k => entry.old_data[k] !== entry.new_data[k] && k !== "id")

@@ -1,7 +1,4 @@
-/**
- * DataSourceBadge — Colour-coded pill badge (Section 6.3)
- * default → amber, actual_unverified → blue, actual_verified → green
- */
+
 export default function DataSourceBadge({ source }) {
   const config = {
     default: {

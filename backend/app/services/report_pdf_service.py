@@ -9,26 +9,28 @@ from __future__ import annotations
 import io
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.config.constants import APP_NAME, PLATFORM_LABEL, PLATFORM_AI_LABEL
+
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-# ── Colour palette (matching frontend reference) ──────────────────────────────
-C_DARK_GREEN  = colors.HexColor("#1b5e20")   # header banner bg
-C_GREEN       = colors.HexColor("#2e7d32")   # section title bg / totals
+
+C_DARK_GREEN  = colors.HexColor("#1b5e20")   
+C_GREEN       = colors.HexColor("#2e7d32")   
 C_WHITE       = colors.white
-C_DARK        = colors.HexColor("#14181e")   # body text
-C_MID         = colors.HexColor("#505f6e")   # label text
-C_LIGHT_BG    = colors.HexColor("#f0f4f8")   # zebra stripe
-C_TBL_HDR    = colors.HexColor("#2e7d32")   # table header bg
-C_INFO_BOX    = colors.HexColor("#e3f2fd")   # CBAM regulatory box bg
-C_INFO_BORDER = colors.HexColor("#64b5f6")   # CBAM regulatory box border
-C_ORANGE      = colors.HexColor("#ea580c")   # CBAM card accent
-C_BLUE        = colors.HexColor("#2563eb")   # Scope-2 card accent
-C_SLATE       = colors.HexColor("#4b5563")   # Scope-1 card accent
+C_DARK        = colors.HexColor("#14181e")   
+C_MID         = colors.HexColor("#505f6e")   
+C_LIGHT_BG    = colors.HexColor("#f0f4f8")   
+C_TBL_HDR     = colors.HexColor("#b71c1c")   
+C_INFO_BOX    = colors.HexColor("#e3f2fd")   
+C_INFO_BORDER = colors.HexColor("#64b5f6")   
+C_ORANGE      = colors.HexColor("#ea580c")   
+C_BLUE        = colors.HexColor("#2563eb")   
+C_SLATE       = colors.HexColor("#4b5563")   
 C_FOOTER_BG   = colors.HexColor("#e6ebf0")
 
-PAGE_W, PAGE_H = A4                          # 595.28 × 841.89 pt
+PAGE_W, PAGE_H = A4                          
 MARGIN = 40
 CONTENT_W = PAGE_W - MARGIN * 2
 
@@ -60,7 +62,7 @@ STANDARD_FACTORS = [
 ]
 
 
-# ── Canvas helper ─────────────────────────────────────────────────────────────
+
 
 class ReportCanvas:
     """Thin wrapper around ReportLab canvas that tracks current y-position and
@@ -70,21 +72,37 @@ class ReportCanvas:
         self.c = canvas.Canvas(buf, pagesize=A4)
         self.c.setTitle(title)
         self.y = MARGIN + 10
-        self._pages: List[str] = []   # footer texts per page
         self._footer_text = ""
 
-    # ── Page management ───────────────────────────────────────────────────────
+    
 
-    def new_page(self) -> None:
+    def new_page(self, add_footer: bool = True) -> None:
+        if add_footer and hasattr(self, '_current_footer'):
+            self._draw_footer()
         self.c.showPage()
         self.y = MARGIN + 10
+    
+    def _draw_footer(self) -> None:
+        """Draw footer at bottom of current page."""
+        footer_y = PAGE_H - 25
+        self.c.setFillColor(C_FOOTER_BG)
+        self.c.rect(0, 0, PAGE_W, 30, fill=1, stroke=0)
+        self.c.setFillColor(C_MID)
+        self.c.setFont("Helvetica", 7)
+        self.c.drawString(MARGIN, 15, self._current_footer)
+        page_num = self.c.getPageNumber()
+        self.c.drawRightString(PAGE_W - MARGIN, 15, f"Page {page_num}")
+    
+    def set_footer(self, text: str) -> None:
+        """Set footer text for all pages."""
+        self._current_footer = text
 
     def check_space(self, needed: float) -> None:
         """Insert a new page if there isn't enough vertical space."""
-        if self.y + needed > PAGE_H - 55:
+        if self.y + needed > PAGE_H - 60:
             self.new_page()
 
-    # ── Drawing primitives ────────────────────────────────────────────────────
+    
 
     def filled_rect(self, x, y, w, h, fill: colors.Color, stroke: Optional[colors.Color] = None) -> None:
         self.c.setFillColor(fill)
@@ -143,19 +161,21 @@ class ReportCanvas:
         return y
 
     def save(self) -> None:
+        if hasattr(self, '_current_footer'):
+            self._draw_footer()
         self.c.save()
 
 
-# ── Shared layout blocks ───────────────────────────────────────────────────────
+
 
 def _add_header(cv: ReportCanvas, report_type: str, title: str,
                 period: str, status: str, created_date: str) -> None:
     """Green banner at top of first page."""
-    # Banner background
-    cv.filled_rect(0, 0, PAGE_W, 110, C_DARK_GREEN)
+    
+    cv.filled_rect(0, 0, PAGE_W, 120, C_DARK_GREEN)
 
-    # Brand name
-    cv.text("NetZeroWorks", MARGIN, 45, size=24, bold=True, color=C_WHITE)
+    
+    cv.text(APP_NAME, MARGIN, 50, size=26, bold=True, color=C_WHITE)
 
     type_label = {
         "secr": "SECR / GHG Protocol Aligned Report",
@@ -163,60 +183,60 @@ def _add_header(cv: ReportCanvas, report_type: str, title: str,
         "executive_summary": "Executive Carbon Performance & Reduction Summary",
     }.get(report_type, "Carbon Report")
 
-    cv.text(type_label, MARGIN, 63, size=10, color=C_WHITE)
-    cv.text(title, MARGIN, 90, size=14, bold=True, color=C_WHITE)
+    cv.text(type_label, MARGIN, 70, size=11, color=C_WHITE)
+    cv.text(title, MARGIN, 100, size=15, bold=True, color=C_WHITE)
 
-    # Meta row below banner
-    y = 130
-    cv.text(f"Report Type: {type_label.split(' / ')[0]}", MARGIN, y, size=8, color=C_MID)
-    cv.text(f"Period: {period}", PAGE_W - MARGIN, y, size=8, color=C_MID, align="right")
+    
+    y = 140
+    cv.text(f"Report Type: {type_label.split(' / ')[0]}", MARGIN, y, size=9, color=C_MID)
+    cv.text(f"Period: {period}", PAGE_W - MARGIN, y, size=9, color=C_MID, align="right")
     y += 14
-    cv.text(f"Status: {status.upper()}", MARGIN, y, size=8, color=C_MID)
-    cv.text(f"Generated: {created_date}", PAGE_W - MARGIN, y, size=8, color=C_MID, align="right")
+    cv.text(f"Status: {status.upper()}", MARGIN, y, size=9, color=C_MID)
+    cv.text(f"Generated: {created_date}", PAGE_W - MARGIN, y, size=9, color=C_MID, align="right")
 
-    cv.y = y + 25
+    cv.y = y + 40
 
 
 def _add_section_title(cv: ReportCanvas, title: str) -> None:
-    cv.check_space(32)
+    cv.check_space(35)
     cv.rounded_rect(MARGIN, cv.y, CONTENT_W, 22, 3, C_GREEN)
-    cv.text(title, MARGIN + 8, cv.y + 15, size=10, bold=True, color=C_WHITE)
-    cv.y += 30
+    cv.text(title, MARGIN + 10, cv.y + 14, size=10, bold=True, color=C_WHITE)
+    cv.y += 32
 
 
 def _add_table(cv: ReportCanvas, headers: List[str], rows: List[List[str]],
                col_widths: List[float]) -> None:
     from reportlab.pdfbase.pdfmetrics import stringWidth
-    ROW_H, HDR_H = 20, 22
+    ROW_H, HDR_H = 20, 24
 
     cv.check_space(HDR_H + ROW_H * min(len(rows), 3))
 
-    # Header row
+    
     cv.filled_rect(MARGIN, cv.y, CONTENT_W, HDR_H, C_TBL_HDR)
-    x = MARGIN + 6
+    x = MARGIN + 8
     for i, h in enumerate(headers):
-        cv.text(h, x, cv.y + 15, size=8, bold=True, color=C_WHITE)
+        cv.text(h, x, cv.y + 14, size=9, bold=True, color=C_WHITE)
         x += col_widths[i]
     cv.y += HDR_H
 
-    # Data rows
+    
     for row_i, row in enumerate(rows):
         cv.check_space(ROW_H)
         if row_i % 2 == 0:
             cv.filled_rect(MARGIN, cv.y, CONTENT_W, ROW_H, C_LIGHT_BG)
-        x = MARGIN + 6
+        x = MARGIN + 8
         for i, cell in enumerate(row):
-            # Truncate if too wide
+            
             font = "Helvetica"
-            max_w = col_widths[i] - 10
+            max_w = col_widths[i] - 12
             s = str(cell)
-            while stringWidth(s, font, 8) > max_w and len(s) > 1:
+            while stringWidth(s, font, 9) > max_w and len(s) > 1:
                 s = s[:-2] + "…"
-            cv.text(s, x, cv.y + 13, size=8, color=C_DARK)
+            cv.text(s, x, cv.y + 12, size=9, color=C_DARK)
             x += col_widths[i]
         cv.y += ROW_H
 
-    cv.y += 5
+    cv.y += 15
 
 
 def _add_kv_table(cv: ReportCanvas, pairs: List[Tuple[str, str]]) -> None:
@@ -226,24 +246,24 @@ def _add_kv_table(cv: ReportCanvas, pairs: List[Tuple[str, str]]) -> None:
         cv.check_space(ROW_H)
         if i % 2 == 0:
             cv.filled_rect(MARGIN, cv.y, CONTENT_W, ROW_H, C_LIGHT_BG)
-        cv.text(label, MARGIN + 6, cv.y + 13, size=8, bold=True, color=C_MID)
-        cv.text(value, MARGIN + label_w, cv.y + 13, size=8, color=C_DARK)
+        cv.text(label, MARGIN + 8, cv.y + 12, size=9, bold=True, color=C_MID)
+        cv.text(value, MARGIN + label_w, cv.y + 12, size=9, color=C_DARK)
         cv.y += ROW_H
-    cv.y += 5
+    cv.y += 15
 
 
 def _add_footer(cv: ReportCanvas, footer_text: str) -> None:
     """Add page numbers + footer text to every page after saving."""
-    # We draw per-page footers by iterating pages before save
-    # ReportLab doesn't have a built-in "afterPage" hook on canvas,
-    # so we use a two-pass approach: record current page count at end
+    
+    
+    
     total = cv.c.getPageNumber()
     for page_num in range(1, total + 1):
-        cv.c.showPage()  # finish current page (resets to new page tracking)
+        cv.c.showPage()  
 
-    # Rebuild using a fresh approach — draw footer on current (last) page and re-render
-    # For simplicity, we append footer as page marks on save via _finalize
-    pass  # handled in _finalize_pdf
+    
+    
+    pass  
 
 
 def _finalize_pdf(buf: io.BytesIO, footer_text: str) -> bytes:
@@ -257,23 +277,22 @@ def _draw_page_footer(cv: ReportCanvas, footer_text: str) -> None:
     """Call at end of each page to stamp footer before showPage()."""
     cv.filled_rect(0, PAGE_H - 30, PAGE_W, 30, C_FOOTER_BG)
     cv.text(footer_text, MARGIN, PAGE_H - 12, size=7, color=C_MID)
-    # Page number drawn later in multi-page tracking; approximate here
-    cv.text("NetZeroWorks Platform", PAGE_W - MARGIN, PAGE_H - 12,
+    
+    cv.text(PLATFORM_LABEL, PAGE_W - MARGIN, PAGE_H - 12,
             size=7, color=C_MID, align="right")
 
 
-def _add_emission_factors_appendix(cv: ReportCanvas, index: str = "") -> None:
+def _add_emission_factors_appendix(cv: ReportCanvas) -> None:
     cv.new_page()
-    title = f"{index} Emission Factors Appendix" if index else "Emission Factors Appendix"
-    _add_section_title(cv, title)
+    _add_section_title(cv, "6. Emission Factors Appendix")
 
     intro = (
         "To ensure full transparency, below is the list of standard emission factors "
-        "used by NetZeroWorks for this reporting period (DEFRA 2024 dataset). These factors "
+        f"used by {APP_NAME} for this reporting period (DEFRA 2024 dataset). These factors "
         "convert raw activity data into tonnes of CO2 equivalent (tCO2e)."
     )
-    cv.y = cv.wrap_text(intro, MARGIN, cv.y + 10, CONTENT_W, size=9, color=C_DARK)
-    cv.y += 6
+    cv.y = cv.wrap_text(intro, MARGIN, cv.y + 6, CONTENT_W, size=9, color=C_DARK, line_h=14)
+    cv.y += 12
 
     grouped: Dict[str, list] = {}
     for scope, category, source, unit, factor in STANDARD_FACTORS:
@@ -281,24 +300,26 @@ def _add_emission_factors_appendix(cv: ReportCanvas, index: str = "") -> None:
 
     for scope, factors in grouped.items():
         cv.check_space(25)
-        cv.text(scope, MARGIN, cv.y, size=9, bold=True, color=C_DARK)
+        cv.text(scope, MARGIN, cv.y, size=10, bold=True, color=C_DARK)
         cv.y += 14
         for category, source, unit, factor in factors:
             cv.check_space(14)
             line = f"  • {source} ({category}): {factor:.5f} kg CO2e per {unit}"
-            cv.text(line, MARGIN + 8, cv.y, size=8, color=C_MID)
+            cv.text(line, MARGIN + 10, cv.y, size=9, color=C_MID)
             cv.y += 13
-        cv.y += 4
+        cv.y += 8
 
 
-# ── SECR Report ───────────────────────────────────────────────────────────────
+
 
 def _build_secr(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str]) -> None:
     _add_header(cv, "secr", meta["title"], meta["period"], meta["status"], meta["created_date"])
+    cv.set_footer(f"{PLATFORM_LABEL} | {meta['title']} | Generated {meta['created_date']}")
 
+    
     org = data.get("organization")
+    _add_section_title(cv, "1. Organisation Details")
     if org:
-        _add_section_title(cv, "Organisation Details")
         _add_kv_table(cv, [
             ("Organisation",    org.get("name", "—")),
             ("Industry",        org.get("industry") or "—"),
@@ -309,8 +330,11 @@ def _build_secr(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str]) ->
              f"{org.get('reduction_target_pct')}% per annum"
              if org.get("reduction_target_pct") else "—"),
         ])
+    else:
+        cv.text("No organisation details available.", MARGIN + 8, cv.y, size=9, color=C_MID)
+        cv.y += 30
 
-    _add_section_title(cv, "Emissions Summary by Scope (GHG Protocol)")
+    _add_section_title(cv, "2. Emissions Summary by Scope")
     scope_rows = [
         [s["label"], f"{s['emissions_tco2e']:.2f} tCO2e", s["description"]]
         for s in data.get("scope_breakdown", [])
@@ -318,16 +342,17 @@ def _build_secr(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str]) ->
     _add_table(cv, ["Scope", "Emissions", "Description"],
                scope_rows, [180, 100, CONTENT_W - 280])
 
-    # Total row
-    cv.check_space(20)
+    
+    cv.check_space(24)
     total = data.get("total_emissions_tco2e", 0)
+    cv.filled_rect(MARGIN, cv.y, CONTENT_W, 24, colors.HexColor("#e8f5e9"))
     cv.text(f"Total Gross Emissions: {total:.2f} tCO2e",
-            MARGIN + 6, cv.y + 5, size=8, bold=True, color=C_DARK)
-    cv.y += 20
+            MARGIN + 8, cv.y + 14, size=10, bold=True, color=C_DARK)
+    cv.y += 35
 
     activities = data.get("activities", [])
     if activities:
-        _add_section_title(cv, "Detailed Emission Activity Log")
+        _add_section_title(cv, "3. Detailed Emission Activity Log")
         act_rows = [
             [
                 a["activity_name"],
@@ -344,7 +369,7 @@ def _build_secr(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str]) ->
 
     cats = data.get("category_breakdown", [])
     if cats:
-        _add_section_title(cv, "Category Breakdown")
+        _add_section_title(cv, "4. Category Breakdown")
         cat_rows = [
             [c["category"], f"{c['emissions_tco2e']:.2f}", f"{c['share_pct']:.1f}%"]
             for c in cats
@@ -352,47 +377,47 @@ def _build_secr(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str]) ->
         _add_table(cv, ["Category", "Emissions (tCO2e)", "Share (%)"],
                    cat_rows, [250, 130, CONTENT_W - 380])
 
-    # Methodology & governance — new page
-    cv.new_page()
+    
     _add_section_title(cv, "5. Methodology and Governance")
     org_name = org.get("name", "The Organisation") if org else "The Organisation"
     industry_str = f" within the {org.get('industry')} sector" if org and org.get("industry") else ""
     country_str = org.get("country", "United Kingdom") if org else "United Kingdom"
 
     methodology = (
-        f"Emission calculations are performed by the NetZeroWorks platform using the UK Government "
+        f"Emission calculations are performed by the {APP_NAME} platform using the UK Government "
         f"GHG Conversion Factors for Company Reporting (DEFRA 2024). This report covers "
         f"{org_name}'s operations in {country_str}{industry_str} for the period {meta['period']}. "
-        f"NetZeroWorks applies standard GHG Protocol Corporate Accounting and Reporting Standard "
+        f"{APP_NAME} applies standard GHG Protocol Corporate Accounting and Reporting Standard "
         f"principles. Scope 1 reflects direct combustion of fuels and fugitive emissions. Scope 2 "
         f"reflects location-based emissions from purchased energy. Scope 3 reflects optional "
         f"categories reported by the user. This report applies an Operational Control boundary as "
         f"defined by the GHG Protocol. No independent third-party verification has been performed "
         f"unless explicitly stated."
     )
-    cv.y = cv.wrap_text(methodology, MARGIN, cv.y + 10, CONTENT_W, size=9, color=C_DARK, line_h=14)
+    cv.y = cv.wrap_text(methodology, MARGIN, cv.y + 8, CONTENT_W, size=9, color=C_DARK, line_h=14)
 
-    _add_emission_factors_appendix(cv, "6.")
+    _add_emission_factors_appendix(cv)
 
 
-# ── CBAM Report ───────────────────────────────────────────────────────────────
+
 
 def _build_cbam(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str]) -> None:
     _add_header(cv, "cbam_declaration", meta["title"], meta["period"],
                 meta["status"], meta["created_date"])
+    cv.set_footer(f"{PLATFORM_LABEL} | {meta['title']} | Generated {meta['created_date']}")
 
-    # Regulatory reference box
-    cv.check_space(65)
-    cv.rounded_rect(MARGIN, cv.y, CONTENT_W, 55, 4, C_INFO_BOX, C_INFO_BORDER)
-    cv.text("Regulatory Reference", MARGIN + 10, cv.y + 16, size=9, bold=True,
+    
+    cv.check_space(60)
+    cv.rounded_rect(MARGIN, cv.y, CONTENT_W, 50, 4, C_INFO_BOX, C_INFO_BORDER)
+    cv.text("Regulatory Reference", MARGIN + 10, cv.y + 14, size=9, bold=True,
             color=colors.HexColor("#1976d2"))
     cv.text("Regulation (EU) 2023/956 — Carbon Border Adjustment Mechanism.",
-            MARGIN + 10, cv.y + 30, size=8, color=C_MID)
+            MARGIN + 10, cv.y + 27, size=8, color=C_MID)
     cv.text("Covers: cement, iron/steel, aluminium, fertilisers, electricity and hydrogen.",
-            MARGIN + 10, cv.y + 42, size=8, color=C_MID)
-    cv.y += 70
+            MARGIN + 10, cv.y + 39, size=8, color=C_MID)
+    cv.y += 60
 
-    _add_section_title(cv, "CBAM Declaration Summary")
+    _add_section_title(cv, "1. CBAM Declaration Summary")
     _add_kv_table(cv, [
         ("Total Imports Recorded",      f"{data.get('cbam_import_count', 0)} entries"),
         ("Total Embedded Emissions",    f"{data.get('total_embedded_emissions_tco2e', 0):.2f} tCO2e"),
@@ -403,7 +428,7 @@ def _build_cbam(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str]) ->
 
     cbam_cats = data.get("cbam_category_breakdown", [])
     if cbam_cats:
-        _add_section_title(cv, "Embedded Emissions by Product Category")
+        _add_section_title(cv, "2. Embedded Emissions by Product Category")
         cat_rows = [
             [
                 c["category"],
@@ -418,7 +443,7 @@ def _build_cbam(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str]) ->
 
     cbam_imports = data.get("cbam_imports", [])
     if cbam_imports:
-        _add_section_title(cv, "Full CBAM Import Register")
+        _add_section_title(cv, "3. Full CBAM Import Register")
         imp_rows = [
             [
                 i["product_name"],
@@ -436,13 +461,14 @@ def _build_cbam(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str]) ->
                    imp_rows, [95, 65, 65, 75, 50, 90, CONTENT_W - 440])
 
 
-# ── Executive Summary ──────────────────────────────────────────────────────────
+
 
 def _build_executive(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str]) -> None:
     _add_header(cv, "executive_summary", meta["title"], meta["period"],
                 meta["status"], meta["created_date"])
+    cv.set_footer(f"{PLATFORM_LABEL} | {meta['title']} | Generated {meta['created_date']}")
 
-    # Highlight cards row
+    
     cv.check_space(70)
     scope_bd = {s["scope"]: s for s in data.get("scope_breakdown", [])}
     cards = [
@@ -495,12 +521,12 @@ def _build_executive(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str
             ("Annual Reduction Target", f"{org.get('reduction_target_pct')}%"),
         ])
 
-    # AI placeholder — new page
+    
     cv.new_page()
     _add_section_title(cv, "AI Generated Strategic Insights")
     placeholder = (
         "The following section will include AI-generated strategic recommendations "
-        "curated by NetZeroWorks AI based on your organisation's carbon profile and "
+        f"curated by {PLATFORM_AI_LABEL} based on your organisation's carbon profile and "
         "regulatory exposure. Suggestions to reduce the SECR Intensity Ratio, mitigate "
         "CBAM liabilities, and optimize energy procurement will appear here once the "
         "AI Insights module has been run for this reporting period."
@@ -510,7 +536,7 @@ def _build_executive(cv: ReportCanvas, data: Dict[str, Any], meta: Dict[str, str
     _add_emission_factors_appendix(cv)
 
 
-# ── Public entry point ────────────────────────────────────────────────────────
+
 
 def generate_pdf(
     report_type: str,
@@ -529,7 +555,7 @@ def generate_pdf(
         Raw PDF bytes ready to stream to the client.
     """
     buf = io.BytesIO()
-    cv = ReportCanvas(buf, title=meta.get("title", "NetZeroWorks Report"))
+    cv = ReportCanvas(buf, title=meta.get("title", f"{APP_NAME} Report"))
 
     if report_type == "cbam_declaration":
         _build_cbam(cv, data, meta)

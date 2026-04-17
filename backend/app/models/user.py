@@ -15,17 +15,21 @@ class User(Base):
     full_name = Column(String, nullable=True)
     hashed_password = Column(String, nullable=True)
     google_id = Column(String, unique=True, nullable=True)
-    role = Column(String(50), default="member")  # admin | member | viewer
+    role = Column(String(50), default="member")  
     is_active = Column(Boolean, default=True)
+    is_verified = Column(Boolean, default=False)
+    otp_code = Column(String, nullable=True)
+    otp_expires_at = Column(DateTime, nullable=True)
+    otp_resend_allowed_at = Column(DateTime, nullable=True)  
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Existing relationships (SECR features)
+    
     organisations_owned = relationship("Organization", back_populates="user", cascade="all, delete-orphan")
     emission_activities = relationship("EmissionActivity", back_populates="user", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="user", cascade="all, delete-orphan")
 
-    # UK CBAM relationships
+    
     organisation = relationship("Organisation", back_populates="users", foreign_keys=[org_id])
     created_imports = relationship("Import", back_populates="creator", foreign_keys="Import.created_by")
     audit_logs = relationship("AuditLog", back_populates="user")

@@ -2,10 +2,11 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, Any
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+import re
 
 
-# ─── Organisation ────────────────────────────────────────────────────
+
 
 class OrganisationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -15,7 +16,7 @@ class OrganisationResponse(BaseModel):
     created_at: datetime
 
 
-# ─── UK CBAM Products (reference data) ──────────────────────────────
+
 
 class UKCBAMProductResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -32,7 +33,7 @@ class UKCBAMProductResponse(BaseModel):
     notes: Optional[str] = None
 
 
-# ─── UK ETS Prices ──────────────────────────────────────────────────
+
 
 class UKETSPriceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -52,7 +53,7 @@ class UKETSPriceCurrentResponse(BaseModel):
     currency: str = "GBP"
 
 
-# ─── Suppliers ──────────────────────────────────────────────────────
+
 
 class SupplierBase(BaseModel):
     name: str
@@ -86,7 +87,7 @@ class SupplierResponse(SupplierBase):
     created_at: datetime
 
 
-# ─── Imports ────────────────────────────────────────────────────────
+
 
 class ImportCreate(BaseModel):
     product_id: uuid.UUID
@@ -95,13 +96,62 @@ class ImportCreate(BaseModel):
     import_value_gbp: Decimal
     quantity_tonnes: Decimal
     country_of_origin: str
-    import_type: str = "standard"  # standard | outward_processing | returned_goods
-    data_source: str = "default"   # default | actual_unverified | actual_verified
+    import_type: str = "standard"  
+    data_source: str = "default"   
     emissions_intensity_actual: Optional[Decimal] = None
     verifier_name: Optional[str] = None
     verification_date: Optional[date] = None
     carbon_price_deduction_gbp: Decimal = Decimal("0")
     deduction_evidence_note: Optional[str] = None
+    # Installation fields (optional)
+    installation_name: Optional[str] = None
+    installation_id: Optional[str] = None
+    production_route: Optional[str] = None
+
+    @field_validator('quantity_tonnes', 'import_value_gbp', 'carbon_price_deduction_gbp', 'emissions_intensity_actual')
+    @classmethod
+    def validate_non_negative(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        """Validate numeric fields are non-negative."""
+        if v is not None and v < 0:
+            raise ValueError("Value must be non-negative")
+        return v
+
+    @field_validator('import_date')
+    @classmethod
+    def validate_date_not_future(cls, v: date) -> date:
+        """Validate import_date is not in the future."""
+        if v > date.today():
+            raise ValueError("import_date cannot be in the future")
+        return v
+
+    @field_validator('installation_name')
+    @classmethod
+    def validate_installation_name(cls, v: Optional[str]) -> Optional[str]:
+        """Validate installation_name length."""
+        if v is not None and len(v) > 255:
+            raise ValueError("installation_name must be 255 characters or less")
+        return v
+
+    @field_validator('installation_id')
+    @classmethod
+    def validate_installation_id(cls, v: Optional[str]) -> Optional[str]:
+        """Validate installation_id is alphanumeric and max 100 chars."""
+        if v is not None:
+            if len(v) > 100:
+                raise ValueError("installation_id must be 100 characters or less")
+            if not re.match(r'^[a-zA-Z0-9]+$', v):
+                raise ValueError("installation_id must contain only alphanumeric characters")
+        return v
+
+    @field_validator('production_route')
+    @classmethod
+    def validate_production_route(cls, v: Optional[str]) -> Optional[str]:
+        """Validate production_route is one of the allowed values."""
+        if v is not None:
+            valid_routes = ["BF-BOF", "EAF-scrap", "DRI", "Smelting-electrolysis", "Other"]
+            if v not in valid_routes:
+                raise ValueError(f"production_route must be one of {valid_routes}")
+        return v
 
 
 class ImportUpdate(BaseModel):
@@ -117,6 +167,55 @@ class ImportUpdate(BaseModel):
     verification_date: Optional[date] = None
     carbon_price_deduction_gbp: Optional[Decimal] = None
     deduction_evidence_note: Optional[str] = None
+    # Installation fields (optional)
+    installation_name: Optional[str] = None
+    installation_id: Optional[str] = None
+    production_route: Optional[str] = None
+
+    @field_validator('quantity_tonnes', 'import_value_gbp', 'carbon_price_deduction_gbp', 'emissions_intensity_actual')
+    @classmethod
+    def validate_non_negative(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        """Validate numeric fields are non-negative."""
+        if v is not None and v < 0:
+            raise ValueError("Value must be non-negative")
+        return v
+
+    @field_validator('import_date')
+    @classmethod
+    def validate_date_not_future(cls, v: Optional[date]) -> Optional[date]:
+        """Validate import_date is not in the future."""
+        if v is not None and v > date.today():
+            raise ValueError("import_date cannot be in the future")
+        return v
+
+    @field_validator('installation_name')
+    @classmethod
+    def validate_installation_name(cls, v: Optional[str]) -> Optional[str]:
+        """Validate installation_name length."""
+        if v is not None and len(v) > 255:
+            raise ValueError("installation_name must be 255 characters or less")
+        return v
+
+    @field_validator('installation_id')
+    @classmethod
+    def validate_installation_id(cls, v: Optional[str]) -> Optional[str]:
+        """Validate installation_id is alphanumeric and max 100 chars."""
+        if v is not None:
+            if len(v) > 100:
+                raise ValueError("installation_id must be 100 characters or less")
+            if not re.match(r'^[a-zA-Z0-9]+$', v):
+                raise ValueError("installation_id must contain only alphanumeric characters")
+        return v
+
+    @field_validator('production_route')
+    @classmethod
+    def validate_production_route(cls, v: Optional[str]) -> Optional[str]:
+        """Validate production_route is one of the allowed values."""
+        if v is not None:
+            valid_routes = ["BF-BOF", "EAF-scrap", "DRI", "Smelting-electrolysis", "Other"]
+            if v not in valid_routes:
+                raise ValueError(f"production_route must be one of {valid_routes}")
+        return v
 
 
 class ImportResponse(BaseModel):
@@ -132,35 +231,40 @@ class ImportResponse(BaseModel):
     country_of_origin: str
     import_type: str
 
-    # Emissions
+    
     data_source: str
     emissions_intensity_actual: Optional[Decimal] = None
     emissions_intensity_default: Decimal
     verifier_name: Optional[str] = None
     verification_date: Optional[date] = None
 
-    # Carbon price deduction
+    
     carbon_price_deduction_gbp: Decimal = Decimal("0")
     deduction_evidence_note: Optional[str] = None
 
-    # Formula outputs
+    
     uk_ets_rate_used: Optional[Decimal] = None
     embedded_emissions_tco2e: Optional[Decimal] = None
     cbam_liability_gbp: Optional[Decimal] = None
     cbam_liability_default_gbp: Optional[Decimal] = None
     potential_saving_gbp: Optional[Decimal] = None
 
-    # Special rules
+    
     is_threshold_exempt: bool = False
     exemption_reason: Optional[str] = None
 
-    # Audit
+    # Installation fields
+    installation_name: Optional[str] = None
+    installation_id: Optional[str] = None
+    production_route: Optional[str] = None
+
+    
     created_by: Optional[uuid.UUID] = None
     created_at: datetime
     updated_at: datetime
 
 
-# ─── Audit Log ──────────────────────────────────────────────────────
+
 
 class AuditLogResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -177,10 +281,10 @@ class AuditLogResponse(BaseModel):
     created_at: datetime
 
 
-# ─── CBAM Reports ───────────────────────────────────────────────────
+
 
 class CBAMReportCreate(BaseModel):
-    report_type: str  # annual | quarterly
+    report_type: str  
     period_start: date
     period_end: date
 
@@ -200,11 +304,11 @@ class CBAMReportResponse(BaseModel):
     file_path: Optional[str] = None
 
 
-# ─── Threshold ──────────────────────────────────────────────────────
+
 
 class ThresholdStatusResponse(BaseModel):
     total_gbp: Decimal
     threshold_gbp: Decimal = Decimal("50000")
     percentage: float
-    status: str  # below | warning | exceeded
+    status: str  
     imports_in_window: int

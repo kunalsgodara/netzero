@@ -1,5 +1,5 @@
-import { Toaster } from 'sonner';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'sonner';
 import { queryClient } from '@/hooks/useQueryClient';
 import { pagesConfig } from './pages.config';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
@@ -7,9 +7,11 @@ import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import PageNotFound from '@/components/ui/PageNotFound';
 import Benchmarking from './pages/Benchmarking';
 import ScenarioPlanner from './pages/ScenarioPlanner';
-import Landing from './pages/Landing';
+import Landing from './pages/Landing'; 
 import AddImportPage from './pages/AddImportPage';
 import ImportDetailPage from './pages/ImportDetailPage';
+import UKCBAMCalculator from './pages/UKCBAMCalculator';
+import UKCBAMProducts from './pages/UKCBAMProducts';
 
 const { Pages, Layout } = pagesConfig;
 
@@ -38,9 +40,11 @@ function AuthenticatedApp() {
           element={<LayoutWrapper currentPageName={path}><Page /></LayoutWrapper>}
         />
       ))}
-      {/* UK CBAM sub-pages — keep CBAMManager highlighted in sidebar */}
+      
       <Route path="/AddImport" element={<LayoutWrapper currentPageName="CBAMManager"><AddImportPage /></LayoutWrapper>} />
       <Route path="/ImportDetail/:id" element={<LayoutWrapper currentPageName="CBAMManager"><ImportDetailPage /></LayoutWrapper>} />
+      <Route path="/UKCBAMCalculator" element={<LayoutWrapper currentPageName="UKCBAMCalculator"><UKCBAMCalculator /></LayoutWrapper>} />
+      <Route path="/UKCBAMProducts" element={<LayoutWrapper currentPageName="UKCBAMProducts"><UKCBAMProducts /></LayoutWrapper>} />
       <Route path="/Benchmarking" element={<LayoutWrapper currentPageName="Benchmarking"><Benchmarking /></LayoutWrapper>} />
       <Route path="/ScenarioPlanner" element={<LayoutWrapper currentPageName="ScenarioPlanner"><ScenarioPlanner /></LayoutWrapper>} />
       <Route path="*" element={<PageNotFound />} />
@@ -53,9 +57,9 @@ export default function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
         <Router>
+          <Toaster richColors position="bottom-right" />
           <AuthenticatedApp />
         </Router>
-        <Toaster />
       </QueryClientProvider>
     </AuthProvider>
   );

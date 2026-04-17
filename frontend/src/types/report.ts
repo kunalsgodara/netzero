@@ -36,7 +36,7 @@ export interface ReportGeneratePayload {
   end_date?: string;
 }
 
-// --- Aggregation types ---
+
 
 export interface ScopeBreakdown {
   scope: string;

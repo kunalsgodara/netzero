@@ -1,19 +1,17 @@
-/**
- * PDF Report Generator using jsPDF.
- * Generates styled PDFs matching the reference templates for SECR, CBAM, and Executive reports.
- */
+
 import jsPDF from 'jspdf';
 import type { ReportAggregation } from '@/types/report';
+import LABELS from '@/utils/labels';
 
-// Colour palette (matching reference PDFs)
-const GREEN = [46, 125, 50] as const;       // #2e7d32 — section headers
-const DARK_GREEN = [27, 94, 32] as const;   // #1b5e20 — header banner
+
+const GREEN = [46, 125, 50] as const;       
+const DARK_GREEN = [27, 94, 32] as const;   
 const WHITE = [255, 255, 255] as const;
 const DARK = [20, 30, 40] as const;
 const MID = [80, 95, 110] as const;
-const LIGHT_BG = [240, 244, 248] as const;  // zebra stripe
+const LIGHT_BG = [240, 244, 248] as const;  
 const TABLE_HEADER_BG = [46, 125, 50] as const;
-const INFO_BOX = [227, 242, 253] as const;  // light blue regulatory box
+const INFO_BOX = [227, 242, 253] as const;  
 const INFO_BORDER = [100, 181, 246] as const;
 
 const PAGE_W = 595.28;
@@ -21,7 +19,7 @@ const PAGE_H = 841.89;
 const MARGIN = 40;
 const CONTENT_W = PAGE_W - MARGIN * 2;
 
-// Standard GHG Protocol / DEFRA 2024 Factors (Comprehensive list for Appendix)
+
 const STANDARD_FACTORS = [
   { scope: 'Scope 1', category: 'Stationary Combustion', source: 'Natural Gas', unit: 'kWh', factor: 0.18293 },
   { scope: 'Scope 1', category: 'Stationary Combustion', source: 'Diesel', unit: 'litres', factor: 2.68787 },
@@ -57,14 +55,14 @@ interface ReportMeta {
   createdDate: string;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+
 
 function initDoc(): jsPDF {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
-  // Monkey-patch text generation to sanitize unsupported subscript fonts 
+  
   const originalText = doc.text.bind(doc);
-  // @ts-ignore
+  
   doc.text = function (text: any, x: any, y: any, options?: any) {
     const sanitize = (s: string) => s.replace(/₂/g, '2').replace(/₃/g, '3');
     if (typeof text === 'string') {
@@ -108,14 +106,14 @@ function truncateText(doc: jsPDF, text: string, maxWidth: number): string {
 }
 
 function addHeader(doc: jsPDF, meta: ReportMeta): number {
-  // Green banner
+  
   doc.setFillColor(...DARK_GREEN);
   doc.rect(0, 0, PAGE_W, 110, 'F');
 
   doc.setTextColor(...WHITE);
   doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
-  doc.text('NetZeroWorks', MARGIN, 45);
+  doc.text(LABELS.BRAND_NAME, MARGIN, 45);
 
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
@@ -129,7 +127,7 @@ function addHeader(doc: jsPDF, meta: ReportMeta): number {
   doc.setFont('helvetica', 'bold');
   doc.text(meta.title, MARGIN, 90);
 
-  // Meta info below banner
+  
   let y = 130;
   doc.setTextColor(...MID);
   doc.setFontSize(9);
@@ -167,7 +165,7 @@ function addTable(
 
   y = checkPageBreak(doc, y, HDR_H + ROW_H * Math.min(rows.length, 3));
 
-  // Header row
+  
   doc.setFillColor(...TABLE_HEADER_BG);
   doc.rect(MARGIN, y, CONTENT_W, HDR_H, 'F');
   doc.setTextColor(...WHITE);
@@ -180,11 +178,11 @@ function addTable(
   });
   y += HDR_H;
 
-  // Data rows
+  
   doc.setFont('helvetica', 'normal');
   rows.forEach((row, rowIdx) => {
     y = checkPageBreak(doc, y, ROW_H);
-    // Zebra stripe
+    
     if (rowIdx % 2 === 0) {
       doc.setFillColor(...LIGHT_BG);
       doc.rect(MARGIN, y, CONTENT_W, ROW_H, 'F');
@@ -250,12 +248,12 @@ function addEmissionFactorsAppendix(doc: jsPDF, y: number, indexNumber: string =
   doc.setFontSize(9);
   y += 10;
 
-  const appendixIntro = `To ensure full transparency, below is a list of all standard emission factors supported by NetZeroWorks for this reporting period (DEFRA 2024 dataset). These factors are used to convert raw activity data into tonnes of carbon dioxide equivalent (tCO2e).\n\n`;
+  const appendixIntro = `To ensure full transparency, below is a list of all standard emission factors supported by ${LABELS.BRAND_NAME} for this reporting period (DEFRA 2024 dataset). These factors are used to convert raw activity data into tonnes of carbon dioxide equivalent (tCO2e).\n\n`;
   const splitIntro = doc.splitTextToSize(appendixIntro, CONTENT_W);
   doc.text(splitIntro, MARGIN, y);
   y += splitIntro.length * 12;
 
-  // Group factors for display
+  
   const grouped = STANDARD_FACTORS.reduce((acc, f) => {
     if (!acc[f.scope]) acc[f.scope] = [];
     acc[f.scope].push(f);
@@ -280,13 +278,13 @@ function addEmissionFactorsAppendix(doc: jsPDF, y: number, indexNumber: string =
   return y;
 }
 
-// ─── SECR Report ────────────────────────────────────────────────────────────
+
 
 export function generateSECRPdf(data: ReportAggregation, meta: ReportMeta) {
   const doc = initDoc();
   let y = addHeader(doc, meta);
 
-  // Organisation Details
+  
   if (data.organization) {
     const org = data.organization;
     y = addSectionTitle(doc, 'Organisation Details', y);
@@ -300,7 +298,7 @@ export function generateSECRPdf(data: ReportAggregation, meta: ReportMeta) {
     ], y);
   }
 
-  // Emissions Summary by Scope
+  
   y = addSectionTitle(doc, 'Emissions Summary by Scope (GHG Protocol)', y);
   const scopeHeaders = ['Scope', 'Emissions', 'Description'];
   const scopeWidths = [180, 100, CONTENT_W - 280];
@@ -310,7 +308,7 @@ export function generateSECRPdf(data: ReportAggregation, meta: ReportMeta) {
   const totalRow = ['Total Gross Emissions', `${data.total_emissions_tco2e.toFixed(2)} tCO2e`, ''];
   y = addTable(doc, scopeHeaders, scopeRows, scopeWidths, y);
 
-  // Total row
+  
   y = checkPageBreak(doc, y, 20);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
@@ -319,7 +317,7 @@ export function generateSECRPdf(data: ReportAggregation, meta: ReportMeta) {
   doc.text(`${data.total_emissions_tco2e.toFixed(2)} tCO2e`, MARGIN + 186, y + 5);
   y += 20;
 
-  // Detailed Activity Log
+  
   if (data.activities.length > 0) {
     y = addSectionTitle(doc, 'Detailed Emission Activity Log', y);
     const actHeaders = ['Activity', 'Scope', 'Source', 'Qty', 'Unit', 'tCO2e'];
@@ -331,7 +329,7 @@ export function generateSECRPdf(data: ReportAggregation, meta: ReportMeta) {
     y = addTable(doc, actHeaders, actRows, actWidths, y);
   }
 
-  // Category Breakdown
+  
   if (data.category_breakdown.length > 0) {
     y = addSectionTitle(doc, 'Category Breakdown', y);
     const catHeaders = ['Category', 'Emissions (t CO2e)', 'Share (%)'];
@@ -342,7 +340,7 @@ export function generateSECRPdf(data: ReportAggregation, meta: ReportMeta) {
     y = addTable(doc, catHeaders, catRows, catWidths, y);
   }
 
-  // --- Methodology & Governance ---
+  
   y = addPage(doc);
   y = addSectionTitle(doc, '5. Methodology and Governance', y);
   doc.setTextColor(...DARK);
@@ -353,27 +351,27 @@ export function generateSECRPdf(data: ReportAggregation, meta: ReportMeta) {
   const industry = data.organization?.industry ? ` within the ${data.organization.industry} sector` : '';
   const country = data.organization?.country || 'United Kingdom';
 
-  const methodologyText = `Emission calculations are performed by the NetZeroWorks platform using the UK 
-  Government GHG Conversion Factors for Company Reporting (DEFRA 2024). This report covers ${orgName}'s operations in ${country}${industry} for the period ${meta.period}.\n\nCalculation Methodology: NetZeroWorks applies standard GHG Protocol Corporate Accounting and Reporting Standard principles. Scope 1 reflects direct combustion of fuels and fugitive emissions. Scope 2 reflects location-based emissions from purchased energy. Scope 3 reflects optional categories reported by the user to provide transparency into the value chain.\n\nBoundary & Control: This report applies an "Operational Control" boundary as defined by the GHG Protocol. NetZeroWorks ensures that all data points are mapped to the correct conversion factors based on the activity type, unit of measure, and reporting year.\n\nData Quality and Assurance: NetZeroWorks performs automated validation of inputs to ensure unit consistency. The final tCO2e values represent the best estimate based on the raw data verified by ${orgName}'s directors or authorised representatives. No independent third-party verification has been performed unless explicitly stated.`;
+  const methodologyText = `Emission calculations are performed by the ${LABELS.BRAND_NAME} platform using the UK
+  Government GHG Conversion Factors for Company Reporting (DEFRA 2024). This report covers ${orgName}'s operations in ${country}${industry} for the period ${meta.period}.\n\nCalculation Methodology: ${LABELS.BRAND_NAME} applies standard GHG Protocol Corporate Accounting and Reporting Standard principles. Scope 1 reflects direct combustion of fuels and fugitive emissions. Scope 2 reflects location-based emissions from purchased energy. Scope 3 reflects optional categories reported by the user to provide transparency into the value chain.\n\nBoundary & Control: This report applies an "Operational Control" boundary as defined by the GHG Protocol. ${LABELS.BRAND_NAME} ensures that all data points are mapped to the correct conversion factors based on the activity type, unit of measure, and reporting year.\n\nData Quality and Assurance: ${LABELS.BRAND_NAME} performs automated validation of inputs to ensure unit consistency. The final tCO2e values represent the best estimate based on the raw data verified by ${orgName}'s directors or authorised representatives. No independent third-party verification has been performed unless explicitly stated.`;
 
   const splitMeth = doc.splitTextToSize(methodologyText, CONTENT_W);
   doc.text(splitMeth, MARGIN, y);
   y += splitMeth.length * 15;
 
-  // --- Emission Factors Appendix ---
+  
   y = addEmissionFactorsAppendix(doc, y, '6.');
 
-  addFooter(doc, 'Prepared by NetZeroWorks · SECR / DEFRA aligned · Confidential');
+  addFooter(doc, `Prepared by ${LABELS.BRAND_NAME} · SECR / DEFRA aligned · Confidential`);
   doc.save(`${meta.title.replace(/\s+/g, '_')}_SECR.pdf`);
 }
 
-// ─── CBAM Report ────────────────────────────────────────────────────────────
+
 
 export function generateCBAMPdf(data: ReportAggregation, meta: ReportMeta) {
   const doc = initDoc();
   let y = addHeader(doc, meta);
 
-  // Regulatory Reference box
+  
   y = checkPageBreak(doc, y, 60);
   doc.setFillColor(...INFO_BOX);
   doc.setDrawColor(...INFO_BORDER);
@@ -395,7 +393,7 @@ export function generateCBAMPdf(data: ReportAggregation, meta: ReportMeta) {
   );
   y += 65;
 
-  // CBAM Declaration Summary
+  
   y = addSectionTitle(doc, 'CBAM Declaration Summary', y);
   y = addKeyValueTable(doc, [
     ['Total Imports Recorded', `${data.cbam_import_count} entries`],
@@ -404,7 +402,7 @@ export function generateCBAMPdf(data: ReportAggregation, meta: ReportMeta) {
     ['Pending Declarations', `${data.pending_declarations} of ${data.cbam_import_count}`],
   ], y);
 
-  // Embedded Emissions by Category
+  
   if (data.cbam_category_breakdown.length > 0) {
     y = addSectionTitle(doc, 'Embedded Emissions by Product Category', y);
     const catHeaders = ['Category', 'Total Qty (t)', 'Embedded (tCO2e)', 'CBAM Charge (€)'];
@@ -416,7 +414,7 @@ export function generateCBAMPdf(data: ReportAggregation, meta: ReportMeta) {
     y = addTable(doc, catHeaders, catRows, catWidths, y);
   }
 
-  // Full Import Register
+  
   if (data.cbam_imports.length > 0) {
     y = addSectionTitle(doc, 'Full CBAM Import Register', y);
     const impHeaders = ['Product', 'HSCN', 'Origin', 'Supplier', 'Qty (t)', 'Embedded tCO2e', 'Status'];
@@ -429,17 +427,17 @@ export function generateCBAMPdf(data: ReportAggregation, meta: ReportMeta) {
     y = addTable(doc, impHeaders, impRows, impWidths, y);
   }
 
-  addFooter(doc, 'EU CBAM Declaration · NetZeroWorks · Confidential');
+  addFooter(doc, `EU CBAM Declaration · ${LABELS.BRAND_NAME} · Confidential`);
   doc.save(`${meta.title.replace(/\s+/g, '_')}_CBAM.pdf`);
 }
 
-// ─── Executive Summary ──────────────────────────────────────────────────────
+
 
 export function generateExecutivePdf(data: ReportAggregation, meta: ReportMeta) {
   const doc = initDoc();
   let y = addHeader(doc, meta);
 
-  // Summary highlight cards
+  
   y = checkPageBreak(doc, y, 70);
   const cardData = [
     { label: 'Total Emissions', value: `${data.total_emissions_tco2e.toFixed(1)} tCO2e`, color: GREEN },
@@ -462,7 +460,7 @@ export function generateExecutivePdf(data: ReportAggregation, meta: ReportMeta) 
   });
   y += 70;
 
-  // GHG Footprint Summary
+  
   y = addSectionTitle(doc, 'GHG Footprint Summary', y);
   const scopeHeaders = ['GHG Scope', 'Emissions (tCO2e)', '% of Total'];
   const scopeWidths = [200, 150, CONTENT_W - 350];
@@ -474,7 +472,7 @@ export function generateExecutivePdf(data: ReportAggregation, meta: ReportMeta) 
   ]);
   y = addTable(doc, scopeHeaders, scopeRows, scopeWidths, y);
 
-  // Category Breakdown
+  
   if (data.category_breakdown.length > 0) {
     y = addSectionTitle(doc, 'Emissions by Category', y);
     const catHeaders = ['Category', 'Emissions (t CO2e)', 'Share (%)'];
@@ -485,7 +483,7 @@ export function generateExecutivePdf(data: ReportAggregation, meta: ReportMeta) 
     y = addTable(doc, catHeaders, catRows, catWidths, y);
   }
 
-  // Organisation Reduction Commitment
+  
   if (data.organization?.reduction_target_pct) {
     y = addSectionTitle(doc, 'Organisation Reduction Commitment', y);
     y = addKeyValueTable(doc, [
@@ -495,26 +493,26 @@ export function generateExecutivePdf(data: ReportAggregation, meta: ReportMeta) 
     ], y);
   }
 
-  // --- AI Strategic Recommendations ---
+  
   y = addPage(doc);
   y = addSectionTitle(doc, 'AI Generated Strategic Insights', y);
   doc.setTextColor(...DARK);
   doc.setFontSize(10);
   y += 10;
 
-  const aiIntro = `The following insights and strategic recommendations are curated by NetZeroWorks AI based on your organization's carbon profile and regulatory exposure.\n\n[ AI Recommendations Module Pending Integration ]\n\nCurated suggestions to reduce the SECR Intensity Ratio, mitigate CBAM liabilities, and optimize energy procurement will dynamically appear here once enabled. Information such as shifting material sourcing or investing in specific renewable initiatives will be powered by AI analysis rather than hardcoded metrics.`;
+  const aiIntro = `The following insights and strategic recommendations are curated by ${LABELS.BRAND_NAME} AI based on your organization's carbon profile and regulatory exposure.\n\n[ AI Recommendations Module Pending Integration ]\n\nCurated suggestions to reduce the SECR Intensity Ratio, mitigate CBAM liabilities, and optimize energy procurement will dynamically appear here once enabled. Information such as shifting material sourcing or investing in specific renewable initiatives will be powered by AI analysis rather than hardcoded metrics.`;
   const splitAi = doc.splitTextToSize(aiIntro, CONTENT_W);
   doc.text(splitAi, MARGIN, y);
   y += splitAi.length * 15;
 
-  // --- Emission Factors Appendix ---
+  
   y = addEmissionFactorsAppendix(doc, y);
 
-  addFooter(doc, 'AI-enhanced Executive Summary · NetZeroWorks · Confidential');
+  addFooter(doc, `AI-enhanced Executive Summary · ${LABELS.BRAND_NAME} · Confidential`);
   doc.save(`${meta.title.replace(/\s+/g, '_')}_Executive.pdf`);
 }
 
-// ─── Dispatcher ─────────────────────────────────────────────────────────────
+
 
 export function generateReportPdf(
   reportType: string,

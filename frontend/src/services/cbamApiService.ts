@@ -1,10 +1,7 @@
-/**
- * UK CBAM API service — all imports-related API calls.
- * Uses the existing httpFetch from the project's httpClient.
- */
+
 import { httpFetch } from '@/services/httpClient';
 
-// ── Types ──────────────────────────────────────────────────────────
+
 
 export interface UKCBAMProduct {
   id: string;
@@ -99,21 +96,21 @@ export interface ImportsListResponse {
   page_size: number;
 }
 
-// ── API Calls ──────────────────────────────────────────────────────
+
 
 export const cbamApi = {
-  // Products (reference data)
+  
   getProducts: () =>
     httpFetch<UKCBAMProduct[]>('/api/products'),
 
   getProduct: (code: string) =>
     httpFetch<UKCBAMProduct>(`/api/products/${code}`),
 
-  // ETS Price
+  
   getCurrentETSPrice: () =>
     httpFetch<UKETSPrice>('/api/ets-price/current'),
 
-  // Imports CRUD
+  
   listImports: (params?: { year?: number; sector?: string; page?: number; page_size?: number }) => {
     const query = new URLSearchParams();
     if (params?.year) query.set('year', String(params.year));
@@ -139,7 +136,30 @@ export const cbamApi = {
   getImportAudit: (id: string) =>
     httpFetch<AuditEntry[]>(`/api/imports/${id}/audit`),
 
-  // Threshold
+  
   getThresholdStatus: () =>
     httpFetch<ThresholdStatus>('/api/threshold/status'),
+
+  
+  bulkImportCSV: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return httpFetch('/api/imports/bulk-csv', {
+      method: 'POST',
+      body: formData,
+      headers: {}, // Let browser set Content-Type with boundary
+    });
+  },
+
+  downloadCSVTemplate: () => {
+    return httpFetch('/api/imports/csv-template');
+  },
+
+  exportExcel: (params?: { year?: number; sector?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.year) query.set('year', String(params.year));
+    if (params?.sector) query.set('sector', params.sector);
+    const qs = query.toString();
+    return httpFetch(`/api/imports/export-excel${qs ? `?${qs}` : ''}`);
+  },
 };

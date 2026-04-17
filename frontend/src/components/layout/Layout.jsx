@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import MobileHeader from "@/components/layout/MobileHeader";
 
-const db = globalThis.__B44_DB__
+import db from "@/api/client"
 
 export default function Layout({ children, currentPageName }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -19,7 +19,7 @@ export default function Layout({ children, currentPageName }) {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      {/* Desktop sidebar */}
+      
       <aside className={`hidden lg:flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ${collapsed ? "w-[68px]" : "w-[260px]"} relative flex-shrink-0`}>
         <Sidebar collapsed={collapsed} currentPageName={currentPageName} user={user} />
         <button
@@ -30,7 +30,7 @@ export default function Layout({ children, currentPageName }) {
         </button>
       </aside>
 
-      {/* Mobile sidebar overlay */}
+      
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />

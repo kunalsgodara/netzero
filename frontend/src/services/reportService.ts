@@ -1,5 +1,4 @@
-import { getToken } from './httpClient';
-import { httpFetch } from './httpClient';
+import { getToken, httpFetch, API_BASE } from './httpClient';
 import type { Report, ReportCreatePayload, ReportGeneratePayload, ReportAggregation, PaginatedReportsResponse } from '@/types/report';
 
 export const reportService = {
@@ -15,26 +14,24 @@ export const reportService = {
   getReportData: (id: string) =>
     httpFetch<ReportAggregation>(`/api/v1/reports/${id}/data`),
 
-  /**
-   * Fetch a server-generated PDF for the given report and trigger a browser download.
-   * Replaces the former client-side jsPDF generation.
-   */
+  
   downloadReportPdf: async (report: Report): Promise<void> => {
     const token = getToken();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const response = await fetch(`/api/v1/reports/${report.id}/pdf`, { headers });
+    const response = await fetch(`${API_BASE}/api/v1/reports/${report.id}/pdf`, { headers });
     if (!response.ok) {
       const err = await response.json().catch(() => ({ detail: 'PDF generation failed' }));
       throw new Error(err.detail || `HTTP ${response.status}`);
     }
 
     const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${report.title.replace(/\s+/g, '_')}.pdf`;
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    
+    a.download = `${report.title.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_')}.pdf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -44,7 +41,7 @@ export const reportService = {
   previewAggregation: (startDate?: string, endDate?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.set('start_date', startDate);
-    if (endDate) params.set('end_date', endDate);
+    if (endDate)   params.set('end_date',   endDate);
     const qs = params.toString();
     return httpFetch<ReportAggregation>(`/api/v1/reports/preview${qs ? `?${qs}` : ''}`);
   },

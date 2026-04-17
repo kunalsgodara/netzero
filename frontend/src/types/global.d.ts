@@ -1,5 +1,5 @@
 declare global {
-  // eslint-disable-next-line no-var
+  
   var __B44_DB__: {
     auth: {
       me: () => Promise<unknown>;

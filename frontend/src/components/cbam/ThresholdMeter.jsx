@@ -1,12 +1,4 @@
-/**
- * ThresholdMeter — Section 6.2
- * Circular progress indicator for the £50k threshold tracker.
- *
- * Props: { current_gbp, threshold_gbp: 50000 }
- *   Under 60%:  green ring + "Below threshold"
- *   60–99%:     amber ring + "Approaching threshold — £X until compliance required"
- *   100%+:      red ring + "Threshold exceeded — UK CBAM compliance required"
- */
+
 export default function ThresholdMeter({ current_gbp = 0, threshold_gbp = 50000 }) {
   const current = parseFloat(current_gbp) || 0;
   const threshold = parseFloat(threshold_gbp) || 50000;
@@ -14,7 +6,7 @@ export default function ThresholdMeter({ current_gbp = 0, threshold_gbp = 50000 
   const clampedPct = Math.min(pct, 100);
   const remaining = Math.max(0, threshold - current);
 
-  // SVG circular arc
+  
   const size = 160;
   const stroke = 10;
   const radius = (size - stroke) / 2;
@@ -47,13 +39,13 @@ export default function ThresholdMeter({ current_gbp = 0, threshold_gbp = 50000 
     <div className="flex flex-col items-center gap-3">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
-          {/* Background ring */}
+          
           <circle
             cx={size / 2} cy={size / 2} r={radius}
             fill="none" strokeWidth={stroke}
             className={bgRingColor}
           />
-          {/* Progress ring */}
+          
           <circle
             cx={size / 2} cy={size / 2} r={radius}
             fill="none" strokeWidth={stroke}
@@ -63,7 +55,7 @@ export default function ThresholdMeter({ current_gbp = 0, threshold_gbp = 50000 
             className={`${ringColor} transition-all duration-700 ease-out`}
           />
         </svg>
-        {/* Center text */}
+        
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className={`text-2xl font-bold ${textColor}`}>{pct.toFixed(0)}%</span>
           <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
@@ -77,7 +69,7 @@ export default function ThresholdMeter({ current_gbp = 0, threshold_gbp = 50000 
         <p className="text-xs text-muted-foreground mt-0.5">{statusDesc}</p>
       </div>
 
-      {/* Value breakdown */}
+      
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
         <span>
           Import value: <span className="font-semibold text-foreground">

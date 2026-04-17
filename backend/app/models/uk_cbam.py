@@ -16,10 +16,11 @@ class Organisation(Base):
     name = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
-    # Relationships
+    
     users = relationship("User", back_populates="organisation", cascade="all, delete-orphan")
     suppliers = relationship("Supplier", back_populates="organisation", cascade="all, delete-orphan")
     imports = relationship("Import", back_populates="organisation", cascade="all, delete-orphan")
+    deadlines = relationship("ComplianceDeadline", back_populates="organisation", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="organisation")
     cbam_reports = relationship("CBAMReport", back_populates="organisation", cascade="all, delete-orphan")
 
@@ -31,15 +32,15 @@ class UKCBAMProduct(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     commodity_code = Column(String(20), unique=True, nullable=False, index=True)
     description = Column(Text, nullable=False)
-    sector = Column(String(50), nullable=False)  # aluminium|cement|fertiliser|hydrogen|steel
-    product_type = Column(String(20), nullable=False)  # simple|complex
-    default_intensity = Column(Numeric(10, 4), nullable=False)  # tCO2e per tonne (HMRC default)
+    sector = Column(String(50), nullable=False)  
+    product_type = Column(String(20), nullable=False)  
+    default_intensity = Column(Numeric(10, 4), nullable=False)  
     valid_from = Column(Date, nullable=False)
-    valid_to = Column(Date, nullable=True)  # NULL = current
-    includes_indirect = Column(Boolean, default=False)  # FALSE until 2029
+    valid_to = Column(Date, nullable=True)  
+    includes_indirect = Column(Boolean, default=False)  
     notes = Column(Text, nullable=True)
 
-    # Relationships
+    
     imports = relationship("Import", back_populates="product")
 
 
@@ -48,8 +49,8 @@ class UKETSPrice(Base):
     __tablename__ = "uk_ets_prices"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    quarter = Column(String(10), nullable=False)  # e.g. "2027-Q1"
-    price_gbp = Column(Numeric(8, 2), nullable=False)  # £ per tCO2e
+    quarter = Column(String(10), nullable=False)  
+    price_gbp = Column(Numeric(8, 2), nullable=False)  
     source = Column(Text, nullable=True)
     fetched_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
@@ -62,15 +63,15 @@ class Supplier(Base):
     name = Column(String(255), nullable=False)
     country = Column(String(100), nullable=True)
     contact_email = Column(String(255), nullable=True)
-    installation_id = Column(String(100), nullable=True)  # HMRC/supplier reference
+    installation_id = Column(String(100), nullable=True)  
     data_status = Column(String(30), default="not_requested")
-    # not_requested | requested | received | verified | failed
+    
     last_request_sent = Column(DateTime(timezone=True), nullable=True)
     last_data_received = Column(DateTime(timezone=True), nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
-    # Relationships
+    
     organisation = relationship("Organisation", back_populates="suppliers")
     imports = relationship("Import", back_populates="supplier")
 
@@ -88,44 +89,50 @@ class Import(Base):
     supplier_id = Column(UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=True)
     product_id = Column(UUID(as_uuid=True), ForeignKey("uk_cbam_products.id"), nullable=False)
     import_date = Column(Date, nullable=False)
-    import_value_gbp = Column(Numeric(14, 2), nullable=False)  # for £50k threshold tracking
+    import_value_gbp = Column(Numeric(14, 2), nullable=False)  
     quantity_tonnes = Column(Numeric(12, 4), nullable=False)
     country_of_origin = Column(String(100), nullable=False)
     import_type = Column(String(30), default="standard")
-    # standard | outward_processing | returned_goods
+    
 
-    # Emissions
+    
     data_source = Column(String(30), nullable=False, default="default")
-    # default | actual_unverified | actual_verified
-    emissions_intensity_actual = Column(Numeric(10, 4), nullable=True)  # tCO2e/tonne (nullable)
-    emissions_intensity_default = Column(Numeric(10, 4), nullable=False)  # from uk_cbam_products
+    
+    emissions_intensity_actual = Column(Numeric(10, 4), nullable=True)  
+    emissions_intensity_default = Column(Numeric(10, 4), nullable=False)  
     verifier_name = Column(String(255), nullable=True)
     verification_date = Column(Date, nullable=True)
 
-    # Carbon price deduction
+    
     carbon_price_deduction_gbp = Column(Numeric(10, 2), default=0)
     deduction_evidence_note = Column(Text, nullable=True)
 
-    # Formula outputs (computed + stored)
-    uk_ets_rate_used = Column(Numeric(8, 2), nullable=True)  # snapshot at calculation time
+    
+    uk_ets_rate_used = Column(Numeric(8, 2), nullable=True)  
     embedded_emissions_tco2e = Column(Numeric(12, 4), nullable=True)
     cbam_liability_gbp = Column(Numeric(14, 2), nullable=True)
-    cbam_liability_default_gbp = Column(Numeric(14, 2), nullable=True)  # always store default cost
-    potential_saving_gbp = Column(Numeric(14, 2), nullable=True)  # delta between default and actual
+    cbam_liability_default_gbp = Column(Numeric(14, 2), nullable=True)  
+    potential_saving_gbp = Column(Numeric(14, 2), nullable=True)  
 
-    # Special rules
+    
     is_threshold_exempt = Column(Boolean, default=False)
     exemption_reason = Column(Text, nullable=True)
 
-    # Audit
+    # Installation-level fields (UK CBAM requirement)
+    installation_name = Column(String(255), nullable=True)
+    installation_id = Column(String(100), nullable=True)
+    production_route = Column(String(50), nullable=True)
+    # production_route values: "BF-BOF", "EAF-scrap", "DRI", "Smelting-electrolysis", "Other"
+
+    
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Soft delete
+    
     is_deleted = Column(Boolean, default=False)
 
-    # Relationships
+    
     organisation = relationship("Organisation", back_populates="imports")
     supplier = relationship("Supplier", back_populates="imports")
     product = relationship("UKCBAMProduct", back_populates="imports")
@@ -137,22 +144,47 @@ class Import(Base):
     )
 
 
+class ComplianceDeadline(Base):
+    """UK CBAM compliance deadlines tracking."""
+    __tablename__ = "compliance_deadlines"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id = Column(UUID(as_uuid=True), ForeignKey("organisations.id", ondelete="CASCADE"), nullable=False)
+    deadline_type = Column(String(50), nullable=False)
+    # Types: "uk_cbam_registration", "uk_cbam_q1_declaration", etc.
+    due_date = Column(Date, nullable=False)
+    status = Column(String(20), nullable=False, default="upcoming")
+    # Status: "upcoming", "at_risk", "overdue", "complete"
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    # Relationships
+    organisation = relationship("Organisation", back_populates="deadlines")
+
+    __table_args__ = (
+        Index("idx_deadlines_org_date", "org_id", "due_date"),
+    )
+
+
 class AuditLog(Base):
+    """Immutable event log — never update or delete rows."""
+    __tablename__ = "audit_log"
     """Immutable event log — never update or delete rows."""
     __tablename__ = "audit_log"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     org_id = Column(UUID(as_uuid=True), ForeignKey("organisations.id"), nullable=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    entity_type = Column(String(50), nullable=False)  # import | supplier | report
+    entity_type = Column(String(50), nullable=False)  
     entity_id = Column(UUID(as_uuid=True), nullable=True)
-    action = Column(String(50), nullable=False)  # created | updated | deleted | exported
+    action = Column(String(50), nullable=False)  
     old_data = Column(JSONB, nullable=True)
     new_data = Column(JSONB, nullable=True)
     ip_address = Column(String(45), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
-    # Relationships
+    
     organisation = relationship("Organisation", back_populates="audit_logs")
     user = relationship("User", back_populates="audit_logs")
 
@@ -166,15 +198,15 @@ class CBAMReport(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     org_id = Column(UUID(as_uuid=True), ForeignKey("organisations.id"), nullable=False)
-    report_type = Column(String(20), nullable=True)  # annual | quarterly
+    report_type = Column(String(20), nullable=True)  
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)
-    status = Column(String(20), default="draft")  # draft | final | submitted
+    status = Column(String(20), default="draft")  
     total_liability = Column(Numeric(14, 2), nullable=True)
     generated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     generated_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-    file_path = Column(Text, nullable=True)  # stored PDF path
+    file_path = Column(Text, nullable=True)  
 
-    # Relationships
+    
     organisation = relationship("Organisation", back_populates="cbam_reports")
     generator = relationship("User", back_populates="generated_reports", foreign_keys=[generated_by])

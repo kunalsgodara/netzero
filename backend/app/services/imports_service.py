@@ -95,7 +95,7 @@ async def _run_calculation(data: ImportCreate, product: UKCBAMProduct, ets_rate:
     )
 
 
-# ── CRUD Operations ────────────────────────────────────────────────
+
 
 
 async def create_import(data: ImportCreate, user: User, db: AsyncSession) -> Import:
@@ -103,33 +103,33 @@ async def create_import(data: ImportCreate, user: User, db: AsyncSession) -> Imp
     if not user.org_id:
         raise HTTPException(status_code=403, detail="You must be assigned to an organisation to create imports")
 
-    # Validate import_type
+    
     if data.import_type not in ("standard", "outward_processing", "returned_goods"):
         raise HTTPException(status_code=400, detail="import_type must be: standard, outward_processing, or returned_goods")
 
-    # Validate data_source
+    
     if data.data_source not in ("default", "actual_unverified", "actual_verified"):
         raise HTTPException(status_code=400, detail="data_source must be: default, actual_unverified, or actual_verified")
 
-    # Validate: actual data sources require emissions_intensity_actual
+    
     if data.data_source in ("actual_unverified", "actual_verified") and data.emissions_intensity_actual is None:
         raise HTTPException(status_code=400, detail="emissions_intensity_actual is required when data_source is actual")
 
-    # Step 1: Fetch product
+    
     product = await _get_product(data.product_id, db)
 
-    # Validate sector (Hard Rule #6)
+    
     valid_sectors = {"aluminium", "cement", "fertiliser", "hydrogen", "steel"}
     if product.sector not in valid_sectors:
         raise HTTPException(status_code=400, detail=f"Sector '{product.sector}' is not in-scope for UK CBAM")
 
-    # Step 2: Fetch UK ETS rate
+    
     ets_rate = await _get_current_ets_rate(db)
 
-    # Steps 3–10: Run calculation
+    
     calc = await _run_calculation(data, product, ets_rate)
 
-    # Build Import record
+    
     imp = Import(
         org_id=user.org_id,
         supplier_id=data.supplier_id,
@@ -146,7 +146,7 @@ async def create_import(data: ImportCreate, user: User, db: AsyncSession) -> Imp
         verification_date=data.verification_date,
         carbon_price_deduction_gbp=data.carbon_price_deduction_gbp,
         deduction_evidence_note=data.deduction_evidence_note,
-        # Formula outputs
+        
         uk_ets_rate_used=calc.uk_ets_rate_used,
         embedded_emissions_tco2e=calc.embedded_emissions_tco2e,
         cbam_liability_gbp=calc.cbam_liability_gbp,
@@ -154,13 +154,13 @@ async def create_import(data: ImportCreate, user: User, db: AsyncSession) -> Imp
         potential_saving_gbp=calc.potential_saving_gbp,
         is_threshold_exempt=calc.is_threshold_exempt,
         exemption_reason=calc.exemption_reason,
-        # Audit
+        
         created_by=user.id,
     )
     db.add(imp)
     await db.flush()
 
-    # Step 11: Audit log
+    
     await _write_audit(db, user.org_id, user.id, imp.id, "created", new_data=_import_to_dict(imp))
 
     return imp
@@ -178,7 +178,7 @@ async def list_imports(
     """GET /api/imports — paginated, filterable, org-scoped."""
     base = (
         select(Import)
-        .where(Import.org_id == org_id, Import.is_deleted == False)  # noqa: E712
+        .where(Import.org_id == org_id, Import.is_deleted == False)  
         .options(joinedload(Import.product), joinedload(Import.supplier))
     )
 
@@ -194,12 +194,12 @@ async def list_imports(
     if supplier_id:
         base = base.where(Import.supplier_id == supplier_id)
 
-    # Count
+    
     count_q = select(func.count()).select_from(base.subquery())
     total_result = await db.execute(count_q)
     total = total_result.scalar()
 
-    # Paginate
+    
     offset = (page - 1) * page_size
     result = await db.execute(
         base.order_by(desc(Import.import_date)).offset(offset).limit(page_size)
@@ -213,7 +213,7 @@ async def get_import(import_id: UUID, org_id: UUID, db: AsyncSession) -> Import:
     """GET /api/imports/{id} — single import, org-scoped."""
     result = await db.execute(
         select(Import)
-        .where(Import.id == import_id, Import.org_id == org_id, Import.is_deleted == False)  # noqa: E712
+        .where(Import.id == import_id, Import.org_id == org_id, Import.is_deleted == False)  
         .options(joinedload(Import.product), joinedload(Import.supplier))
     )
     imp = result.scalar_one_or_none()
@@ -232,16 +232,16 @@ async def update_import(
     imp = await get_import(import_id, user.org_id, db)
     old_data = _import_to_dict(imp)
 
-    # Apply partial updates
+    
     update_fields = data.model_dump(exclude_unset=True)
     for field, value in update_fields.items():
         setattr(imp, field, value)
 
-    # Re-fetch product (may have changed)
+    
     product = await _get_product(imp.product_id, db)
     ets_rate = await _get_current_ets_rate(db)
 
-    # Rebuild ImportCreate-like object for recalculation
+    
     calc = calculate_cbam_liability(
         quantity_tonnes=Decimal(str(imp.quantity_tonnes)),
         data_source=imp.data_source,
@@ -252,7 +252,7 @@ async def update_import(
         uk_ets_rate=ets_rate,
     )
 
-    # Update formula outputs
+    
     imp.emissions_intensity_default = calc.emissions_intensity_default
     imp.uk_ets_rate_used = calc.uk_ets_rate_used
     imp.embedded_emissions_tco2e = calc.embedded_emissions_tco2e
@@ -297,7 +297,7 @@ async def get_import_audit(import_id: UUID, org_id: UUID, db: AsyncSession) -> l
     return result.scalars().all()
 
 
-# ── Threshold Tracker (Section 4.4) ────────────────────────────────
+
 
 
 async def get_threshold_status(org_id: UUID, db: AsyncSession) -> dict:
@@ -317,7 +317,7 @@ async def get_threshold_status(org_id: UUID, db: AsyncSession) -> dict:
         )
         .where(
             Import.org_id == org_id,
-            Import.is_deleted == False,  # noqa: E712
+            Import.is_deleted == False,  
             Import.import_date >= twelve_months_ago,
         )
     )

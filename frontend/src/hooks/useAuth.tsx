@@ -1,8 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import type { User, AuthError } from '@/types/auth';
-import { clearTokens } from '@/api/client';
-
-const db = globalThis.__B44_DB__;
+import { httpFetch, clearTokens, getToken } from '@/services/httpClient';
 
 interface AuthContextValue {
   user: User | null;
@@ -25,21 +23,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAuth = async () => {
     setIsLoadingAuth(true);
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      setIsLoadingAuth(false);
+
+    
+    if (!getToken()) {
       setIsAuthenticated(false);
       setAuthError({ type: 'auth_required', message: 'No token' });
+      setIsLoadingAuth(false);
       return;
     }
+
     try {
-      const currentUser = await db.auth.me() as User;
+      
+      
+      
+      const currentUser = await httpFetch<User>('/api/auth/me');
       setUser(currentUser);
       setIsAuthenticated(true);
       setAuthError(null);
     } catch {
       setIsAuthenticated(false);
-      setAuthError({ type: 'auth_required', message: 'Auth check failed' });
+      setUser(null);
+      setAuthError({ type: 'auth_required', message: 'Session expired' });
     } finally {
       setIsLoadingAuth(false);
     }

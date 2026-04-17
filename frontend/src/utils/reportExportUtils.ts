@@ -1,7 +1,4 @@
-/**
- * Report export utilities (CSV and XLSX).
- * Uses the SheetJS (xlsx) library for rich spreadsheet generation.
- */
+
 import * as XLSX from 'xlsx';
 import type { ReportAggregation } from '@/types/report';
 
@@ -11,7 +8,7 @@ interface ExportMeta {
   period: string;
 }
 
-// ─── CSV Export ──────────────────────────────────────────────────────────────
+
 
 function arrayToCSV(headers: string[], rows: (string | number)[][]): string {
   const escape = (val: string | number) => {
@@ -40,20 +37,20 @@ function downloadBlob(blob: Blob, filename: string) {
 export function exportToCSV(data: ReportAggregation, meta: ExportMeta) {
   const sheets: string[] = [];
 
-  // Emissions summary
+  
   const emHeaders = ['Scope', 'Emissions (tCO2e)', 'Description'];
   const emRows = data.scope_breakdown.map(s => [s.label, s.emissions_tco2e, s.description] as (string | number)[]);
   emRows.push(['TOTAL', data.total_emissions_tco2e, '']);
   sheets.push(`--- Emissions Summary ---\n${arrayToCSV(emHeaders, emRows)}`);
 
-  // Category breakdown
+  
   if (data.category_breakdown.length > 0) {
     const catHeaders = ['Category', 'Emissions (tCO2e)', 'Share (%)'];
     const catRows = data.category_breakdown.map(c => [c.category, c.emissions_tco2e, c.share_pct] as (string | number)[]);
     sheets.push(`\n--- Category Breakdown ---\n${arrayToCSV(catHeaders, catRows)}`);
   }
 
-  // Activity log
+  
   if (data.activities.length > 0) {
     const actHeaders = ['Activity', 'Scope', 'Source', 'Quantity', 'Unit', 'tCO2e', 'Date'];
     const actRows = data.activities.map(a => [
@@ -62,7 +59,7 @@ export function exportToCSV(data: ReportAggregation, meta: ExportMeta) {
     sheets.push(`\n--- Activity Log ---\n${arrayToCSV(actHeaders, actRows)}`);
   }
 
-  // CBAM imports
+  
   if (data.cbam_imports.length > 0) {
     const cbamHeaders = ['Product', 'HSCN', 'Origin', 'Supplier', 'Qty (t)', 'Embedded (tCO2e)', 'Charge (€)', 'Status'];
     const cbamRows = data.cbam_imports.map(i => [
@@ -77,12 +74,12 @@ export function exportToCSV(data: ReportAggregation, meta: ExportMeta) {
   downloadBlob(blob, `${meta.title.replace(/\s+/g, '_')}_${meta.period}.csv`);
 }
 
-// ─── XLSX Export ─────────────────────────────────────────────────────────────
+
 
 export function exportToXLS(data: ReportAggregation, meta: ExportMeta) {
   const wb = XLSX.utils.book_new();
 
-  // Sheet 1: Summary
+  
   const summaryData: (string | number)[][] = [
     ['Report Title', meta.title],
     ['Report Type', meta.type],
@@ -96,11 +93,11 @@ export function exportToXLS(data: ReportAggregation, meta: ExportMeta) {
     ['TOTAL', data.total_emissions_tco2e, ''],
   ];
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-  // Set column widths
+  
   wsSummary['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 50 }];
   XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-  // Sheet 2: Category Breakdown
+  
   if (data.category_breakdown.length > 0) {
     const catData = [
       ['Category', 'Emissions (tCO2e)', 'Share (%)'],
@@ -111,7 +108,7 @@ export function exportToXLS(data: ReportAggregation, meta: ExportMeta) {
     XLSX.utils.book_append_sheet(wb, wsCat, 'Categories');
   }
 
-  // Sheet 3: Activity Log
+  
   if (data.activities.length > 0) {
     const actData = [
       ['Activity', 'Scope', 'Source', 'Quantity', 'Unit', 'tCO2e', 'Date'],
@@ -124,7 +121,7 @@ export function exportToXLS(data: ReportAggregation, meta: ExportMeta) {
     XLSX.utils.book_append_sheet(wb, wsAct, 'Activities');
   }
 
-  // Sheet 4: CBAM Imports
+  
   if (data.cbam_imports.length > 0) {
     const cbamData = [
       ['Product', 'HSCN Code', 'Origin', 'Supplier', 'Qty (tonnes)', 'Embedded (tCO2e)', 'CBAM Charge (€)', 'Status'],
@@ -138,7 +135,7 @@ export function exportToXLS(data: ReportAggregation, meta: ExportMeta) {
     XLSX.utils.book_append_sheet(wb, wsCbam, 'CBAM Imports');
   }
 
-  // CBAM Category Summary
+  
   if (data.cbam_category_breakdown.length > 0) {
     const cbamCatData = [
       ['Category', 'Total Qty (t)', 'Embedded Emissions (tCO2e)', 'CBAM Charge (€)'],

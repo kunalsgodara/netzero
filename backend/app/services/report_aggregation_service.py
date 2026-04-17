@@ -35,7 +35,7 @@ SCOPE_LABELS = {
 def _date_filter(model, start: Optional[date], end: Optional[date]):
     """Build a date filter using activity_date / import_date, falling back to created_date/created_at."""
     conditions = []
-    # Detect fallback column
+    
     if hasattr(model, "created_date"):
         fallback_col = model.created_date
     elif hasattr(model, "created_at"):
@@ -43,7 +43,7 @@ def _date_filter(model, start: Optional[date], end: Optional[date]):
     else:
         fallback_col = None
 
-    # Use hasattr to detect the correct date column for this model
+    
     if hasattr(model, "activity_date"):
         date_col = model.activity_date
     elif hasattr(model, "import_date"):
@@ -55,8 +55,8 @@ def _date_filter(model, start: Optional[date], end: Optional[date]):
         if fallback_col is not None:
             conditions.append(
                 or_(
-                    and_(date_col != None, date_col >= start, date_col <= end),  # noqa: E711
-                    and_(date_col == None, cast(fallback_col, Date) >= start, cast(fallback_col, Date) <= end),  # noqa: E711
+                    and_(date_col != None, date_col >= start, date_col <= end),  
+                    and_(date_col == None, cast(fallback_col, Date) >= start, cast(fallback_col, Date) <= end),  
                 )
             )
         else:
@@ -100,7 +100,7 @@ async def aggregate_emissions(
     result = await db.execute(base.order_by(EmissionActivity.activity_date.asc().nullslast()))
     activities_list = result.scalars().all()
 
-    # Scope breakdown
+    
     scope_totals = {}
     for a in activities_list:
         s = a.scope or "scope_1"
@@ -117,7 +117,7 @@ async def aggregate_emissions(
             emissions_tco2e=round(val, 2), description=desc,
         ))
 
-    # Category breakdown
+    
     cat_totals = {}
     for a in activities_list:
         cat_key = f"{a.category or 'Other'} ({a.scope})"
@@ -135,7 +135,7 @@ async def aggregate_emissions(
             share_pct=round(share, 1),
         ))
 
-    # Activity details
+    
     activity_details = []
     for a in activities_list:
         activity_details.append(ActivityDetail(
@@ -172,7 +172,7 @@ async def aggregate_cbam(
     """
     base = select(CBAMImport).where(
         CBAMImport.created_by == user_id,
-        CBAMImport.is_deleted == False,  # noqa: E712
+        CBAMImport.is_deleted == False,  
     )
     date_conds = _date_filter(CBAMImport, start, end)
     if date_conds:
@@ -184,10 +184,10 @@ async def aggregate_cbam(
     total_charge = sum(float(i.cbam_liability_gbp or 0) for i in imports_list)
     total_embedded = sum(float(i.embedded_emissions_tco2e or 0) for i in imports_list)
 
-    # Sector breakdown (replacing the old EU category breakdown)
+    
     sector_map = {}
     for i in imports_list:
-        # Eagerly load product to get sector info
+        
         sector = "unknown"
         if i.product:
             sector = i.product.sector
@@ -202,12 +202,12 @@ async def aggregate_cbam(
             category=sector,
             total_qty_tonnes=round(data["qty"], 1),
             embedded_emissions_tco2e=round(data["emissions"], 2),
-            cbam_charge_eur=round(data["charge"], 2),  # Using the same schema field name for now
+            cbam_charge_eur=round(data["charge"], 2),  
         )
         for sector, data in sorted(sector_map.items(), key=lambda x: -x[1]["charge"])
     ]
 
-    # Import details
+    
     cbam_imports = [
         CBAMImportDetail(
             product_name=i.product.description if i.product else "Unknown",

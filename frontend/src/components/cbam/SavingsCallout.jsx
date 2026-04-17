@@ -1,8 +1,4 @@
-/**
- * SavingsCallout — Section 6.4
- * Shows £ delta between default and actual cost.
- * Only renders when data_source !== "default".
- */
+
 import { TrendingDown, AlertTriangle } from "lucide-react";
 
 export default function SavingsCallout({ data_source, potential_saving_gbp }) {
@@ -31,7 +27,7 @@ export default function SavingsCallout({ data_source, potential_saving_gbp }) {
     );
   }
 
-  // Unverified
+  
   return (
     <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
       <div className="w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">

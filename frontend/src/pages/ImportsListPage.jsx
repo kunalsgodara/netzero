@@ -1,13 +1,13 @@
-/**
- * ImportsListPage — /CBAMManager (replaces old EU CBAMManager)
- * Paginated table with filters by year and sector.
- */
+
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, ChevronLeft, ChevronRight, Package, Filter, ArrowUpDown } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Package, Filter, Upload, Download } from "lucide-react";
 import { cbamApi } from "@/services/cbamApiService";
 import DataSourceBadge from "@/components/cbam/DataSourceBadge";
+import CSVUploadModal from "@/components/cbam/CSVUploadModal";
+import Select from "@/components/ui/Select";
+import { toast } from "sonner";
 
 function gbp(val) {
   const n = parseFloat(val || 0);
@@ -19,9 +19,12 @@ const YEARS = [2027, 2028, 2029];
 
 export default function ImportsListPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [year, setYear] = useState(null);
   const [sector, setSector] = useState("");
+  const [showCSVUpload, setShowCSVUpload] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const pageSize = 20;
 
   const { data, isLoading, error } = useQuery({
@@ -43,29 +46,95 @@ export default function ImportsListPage() {
 
   const items = data?.items || [];
   const total = data?.total || 0;
-  const totalPages = Math.ceil(total / pageSize);
+  const totalPages = pageSize > 0 ? Math.ceil(total / pageSize) : 0;
 
   const totalLiability = items.reduce((sum, i) => sum + parseFloat(i.cbam_liability_gbp || 0), 0);
   const totalSaving = items.reduce((sum, i) => sum + parseFloat(i.potential_saving_gbp || 0), 0);
 
+  const handleCSVUploadSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ["cbam-imports"] });
+    queryClient.invalidateQueries({ queryKey: ["threshold-status"] });
+    toast.success("CSV import completed successfully");
+  };
+
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (year) params.set("year", String(year));
+      if (sector) params.set("sector", sector);
+
+      const token = localStorage.getItem("access_token");
+      const response = await fetch(`/api/imports/export-excel?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 400) {
+        const body = await response.json().catch(() => ({}));
+        toast.error(body.detail || "No imports found matching the selected filters.");
+        return;
+      }
+      if (!response.ok) {
+        throw new Error("Export failed");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `uk-cbam-imports-${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("Excel export downloaded successfully");
+    } catch (error) {
+      toast.error("Failed to export Excel file");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <>
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
+        
+        <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">UK CBAM Imports</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your Carbon Border Adjustment Mechanism import records</p>
         </div>
-        <button
-          onClick={() => navigate("/AddImport")}
-          className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-emerald-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          Add Import
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCSVUpload(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-background hover:bg-muted border border-border text-foreground rounded-xl text-sm font-semibold transition-all"
+          >
+            <Upload className="w-4 h-4" />
+            Bulk Import CSV
+          </button>
+          <button
+            onClick={handleExportExcel}
+            disabled={isExporting || total === 0}
+            className="flex items-center gap-2 px-4 py-2.5 bg-background hover:bg-muted border border-border text-foreground rounded-xl text-sm font-semibold transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            {isExporting ? (
+              <div className="w-4 h-4 border-2 border-border border-t-foreground rounded-full animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            Export Excel
+          </button>
+          <button
+            onClick={() => navigate("/AddImport")}
+            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-emerald-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            Add Import
+          </button>
+        </div>
       </div>
 
-      {/* KPI Cards */}
+      
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-card shadow-sm border border-border rounded-xl p-4">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Total Imports</p>
@@ -96,7 +165,7 @@ export default function ImportsListPage() {
         </div>
       </div>
 
-      {/* Current UK ETS Rate */}
+      
       {etsPrice && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -105,28 +174,28 @@ export default function ImportsListPage() {
         </div>
       )}
 
-      {/* Filters */}
+      
       <div className="flex items-center gap-3">
         <Filter className="w-4 h-4 text-muted-foreground/70" />
-        <select
+        <Select
           value={year || ""}
           onChange={(e) => { setYear(e.target.value ? Number(e.target.value) : null); setPage(1); }}
-          className="px-3 py-2 rounded-lg bg-background border border-border text-sm text-foreground outline-none focus:ring-2 focus:ring-emerald-500/40"
+          style={{ width: "auto" }}
         >
           <option value="">All Years</option>
           {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select
+        </Select>
+        <Select
           value={sector}
           onChange={(e) => { setSector(e.target.value); setPage(1); }}
-          className="px-3 py-2 rounded-lg bg-background border border-border text-sm text-foreground outline-none focus:ring-2 focus:ring-emerald-500/40"
+          style={{ width: "auto" }}
         >
           <option value="">All Sectors</option>
           {SECTORS.filter(Boolean).map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-        </select>
+        </Select>
       </div>
 
-      {/* Table */}
+      
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         {isLoading ? (
           <div className="p-12 text-center">
@@ -171,7 +240,7 @@ export default function ImportsListPage() {
                   <td className={`p-3 text-right font-mono font-semibold ${imp.is_threshold_exempt ? 'text-blue-400' : 'text-emerald-400'}`}>
                     {imp.is_threshold_exempt ? "Exempt" : gbp(imp.cbam_liability_gbp)}
                   </td>
-                  <td className="p-3 text-right font-mono text-green-400">
+                  <td className="p-3 text-right font-mono text-emerald-500">
                     {parseFloat(imp.potential_saving_gbp || 0) > 0 ? `+${gbp(imp.potential_saving_gbp)}` : "—"}
                   </td>
                   <td className="p-3 text-center">
@@ -185,22 +254,43 @@ export default function ImportsListPage() {
         )}
       </div>
 
-      {/* Pagination */}
+      
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>Page {page} of {totalPages} ({total} imports)</span>
-          <div className="flex gap-2">
-            <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}
-              className="p-2 rounded-lg bg-background border border-border disabled:opacity-30 hover:bg-muted transition-colors">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
-              className="p-2 rounded-lg bg-background border border-border disabled:opacity-30 hover:bg-muted transition-colors">
-              <ChevronRight className="w-4 h-4" />
-            </button>
+        <div className="bg-card border border-border rounded-xl px-4 py-2">
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-muted-foreground">
+              Showing {items.length > 0 ? ((page - 1) * pageSize + 1) : 0} to {Math.min(page * pageSize, total)} of {total} imports
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="inline-flex items-center px-3 py-1.5 border border-border rounded-lg text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-background"
+              >
+                <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Previous
+              </button>
+              <span className="text-xs font-medium text-muted-foreground px-2">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="inline-flex items-center px-3 py-1.5 border border-border rounded-lg text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-background"
+              >
+                Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
+
+      {/* CSV Upload Modal */}
+      <CSVUploadModal
+        isOpen={showCSVUpload}
+        onClose={() => setShowCSVUpload(false)}
+        onUploadSuccess={handleCSVUploadSuccess}
+      />
+    </>
   );
 }

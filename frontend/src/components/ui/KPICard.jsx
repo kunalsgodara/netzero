@@ -18,7 +18,7 @@ export default function KPICard({ title, value, subtitle, icon: Icon, trend, ico
       </div>
       {trend !== null && trend !== undefined ? (
         <p className={`text-xs mt-2 font-medium flex items-center gap-1 ${
-          trend < 0 ? "text-green-600" : trend > 0 ? "text-red-500" : "text-muted-foreground"
+          trend < 0 ? "text-emerald-600" : trend > 0 ? "text-red-500" : "text-muted-foreground"
         }`}>
           {trend < 0 ? <TrendingDown className="w-3 h-3" /> : trend > 0 ? <TrendingUp className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
           {trend > 0 ? "+" : ""}{trend}% vs last quarter

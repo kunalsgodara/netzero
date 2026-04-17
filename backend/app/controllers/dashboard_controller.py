@@ -41,7 +41,7 @@ async def cbam_summary(
     org_id = user.org_id
     base_filter = (Import.org_id == org_id) & (Import.is_deleted == False)
 
-    # ── KPI Totals ──────────────────────────────────────────────
+    
     totals_q = await db.execute(
         select(
             func.count(Import.id).label("total_imports"),
@@ -53,7 +53,7 @@ async def cbam_summary(
     )
     row = totals_q.one()
 
-    # ── By Sector ───────────────────────────────────────────────
+    
     sector_q = await db.execute(
         select(
             UKCBAMProduct.sector,
@@ -78,7 +78,7 @@ async def cbam_summary(
         for r in sector_q.all()
     ]
 
-    # ── By Country ──────────────────────────────────────────────
+    
     country_q = await db.execute(
         select(
             Import.country_of_origin,
@@ -100,7 +100,7 @@ async def cbam_summary(
         for r in country_q.all()
     ]
 
-    # ── Monthly Timeline ────────────────────────────────────────
+    
     timeline_q = await db.execute(
         select(
             extract("year", Import.import_date).label("yr"),

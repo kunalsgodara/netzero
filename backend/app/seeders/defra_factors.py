@@ -1,5 +1,5 @@
-# DEFRA 2024 emission factors for Scope 1, 2, 3
-# Format: (scope, category, source, unit, factor, source_dataset)
+
+
 
 DEFRA_FACTORS = [
     ("Scope 1", "Stationary Combustion", "Natural Gas", "kWh", 0.18293, "DEFRA 2024"),

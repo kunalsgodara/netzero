@@ -1,17 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
 
-/**
- * CustomSelect – a fully styled dropdown that replaces the native <select>.
- *
- * Props:
- *   value        – currently selected value (string)
- *   onChange     – called with the new value string (NOT an event object)
- *   options      – array of { value, label } objects
- *   placeholder  – text shown when nothing is selected
- *   disabled     – boolean
- *   className    – extra classes for the trigger button
- */
+
 export default function CustomSelect({
   value = "",
   onChange,
@@ -24,7 +14,7 @@ export default function CustomSelect({
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
 
-  // Close on outside click
+  
   useEffect(() => {
     const handler = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
@@ -44,7 +34,7 @@ export default function CustomSelect({
 
   return (
     <div ref={containerRef} className={`relative w-full ${className}`} style={{ userSelect: "none" }}>
-      {/* ── Trigger Button ─────────────────────────────────────── */}
+      
       <button
         type="button"
         disabled={disabled}
@@ -88,7 +78,7 @@ export default function CustomSelect({
         />
       </button>
 
-      {/* ── Dropdown Panel ─────────────────────────────────────── */}
+      
       {open && (
         <div
           style={{

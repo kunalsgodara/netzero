@@ -1,10 +1,4 @@
-/**
- * AddImportPage — /AddImport (4-step form per Section 5.2)
- * Step 1: Select Product (commodity code lookup)
- * Step 2: Import Details (date, qty, value, country, type)
- * Step 3: Emissions Data (default vs actual toggle, verifier)
- * Step 4: Review & Save (formula breakdown, submit)
- */
+
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -25,7 +19,7 @@ export default function AddImportPage() {
   const [step, setStep] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Form state
+  
   const [form, setForm] = useState({
     product_id: "",
     import_date: "",
@@ -40,9 +34,12 @@ export default function AddImportPage() {
     carbon_price_deduction_gbp: "0",
     deduction_evidence_note: "",
     deduction_confirmed: false,
+    installation_name: "",
+    installation_id: "",
+    production_route: "",
   });
 
-  // Fetch reference data
+  
   const { data: products } = useQuery({
     queryKey: ["cbam-products"],
     queryFn: () => cbamApi.getProducts(),
@@ -69,7 +66,7 @@ export default function AddImportPage() {
     );
   }, [products, searchTerm]);
 
-  // Preview calculation
+  
   const previewCalc = useMemo(() => {
     if (!selectedProduct || !etsPrice) return null;
     const qty = parseFloat(form.quantity_tonnes) || 0;
@@ -100,7 +97,7 @@ export default function AddImportPage() {
     };
   }, [form, selectedProduct, etsPrice]);
 
-  // Submit mutation
+  
   const createMutation = useMutation({
     mutationFn: () => {
       const payload = {
@@ -117,6 +114,9 @@ export default function AddImportPage() {
           ? parseFloat(form.emissions_intensity_actual) : null,
         verifier_name: form.verifier_name || null,
         verification_date: form.verification_date || null,
+        installation_name: form.installation_name || null,
+        installation_id: form.installation_id || null,
+        production_route: form.production_route || null,
       };
       return cbamApi.createImport(payload);
     },
@@ -129,7 +129,7 @@ export default function AddImportPage() {
 
   const update = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
-  // Validation
+  
   const canNext = () => {
     switch(step) {
       case 1: return !!form.product_id;
@@ -147,7 +147,7 @@ export default function AddImportPage() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
-      {/* Header */}
+      
       <div className="flex items-center gap-4">
         <button onClick={() => navigate("/CBAMManager")} className="p-2 rounded-lg bg-background hover:bg-muted transition-colors">
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
@@ -158,23 +158,29 @@ export default function AddImportPage() {
         </div>
       </div>
 
-      {/* Stepper */}
+      
       <div className="flex gap-1">
         {[1, 2, 3, 4].map((s) => (
           <div key={s} className={`flex-1 h-1.5 rounded-full transition-all ${s <= step ? 'bg-emerald-500' : 'bg-muted'}`} />
         ))}
       </div>
 
-      {/* Step 1: Product Selection */}
+      
       {step === 1 && (
         <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70" />
-            <input
-              type="text" placeholder="Search by commodity code, description, or sector..."
-              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 rounded-xl bg-background border border-border text-sm text-foreground outline-none focus:ring-2 focus:ring-emerald-500/40"
-            />
+          <div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70" />
+              <input
+                type="text" placeholder="Search by commodity code, description, or sector..."
+                value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-background border border-border text-sm text-foreground outline-none focus:ring-2 focus:ring-emerald-500/40"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+              <Info className="w-3 h-3" />
+              CN codes are 8-digit commodity codes (e.g. 72071100)
+            </p>
           </div>
 
           <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
@@ -189,12 +195,14 @@ export default function AddImportPage() {
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-mono text-muted-foreground">{p.commodity_code}</span>
-                    <p className="text-sm font-medium text-foreground mt-0.5">{p.description}</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold font-mono text-emerald-500">{p.commodity_code}</span>
+                      <span className="text-[10px] text-muted-foreground/70 uppercase tracking-wider px-2 py-0.5 rounded bg-muted">{p.sector}</span>
+                    </div>
+                    <p className="text-sm font-medium text-foreground mt-1">{p.description}</p>
                   </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">{p.sector}</span>
+                  <div className="text-right ml-4">
                     <p className="text-sm font-mono text-emerald-400">{p.default_intensity} tCO₂e/t</p>
                   </div>
                 </div>
@@ -204,7 +212,7 @@ export default function AddImportPage() {
         </div>
       )}
 
-      {/* Step 2: Import Details */}
+      
       {step === 2 && (
         <div className="space-y-4">
           <div>
@@ -232,6 +240,55 @@ export default function AddImportPage() {
               {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+          
+          {/* Installation Fields (Optional) */}
+          <div className="border-t border-border pt-4 space-y-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Installation Details (Optional)
+            </p>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Installation Name</label>
+              <input 
+                type="text" 
+                value={form.installation_name} 
+                onChange={(e) => update("installation_name", e.target.value)}
+                maxLength={255}
+                className="w-full mt-1 px-4 py-2.5 rounded-lg bg-background border border-border text-sm text-foreground outline-none focus:ring-2 focus:ring-emerald-500/40" 
+                placeholder="e.g. Sheffield Steel Works" 
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Installation ID</label>
+                <input 
+                  type="text" 
+                  value={form.installation_id} 
+                  onChange={(e) => update("installation_id", e.target.value)}
+                  maxLength={100}
+                  pattern="[A-Za-z0-9]*"
+                  className="w-full mt-1 px-4 py-2.5 rounded-lg bg-background border border-border text-sm text-foreground outline-none focus:ring-2 focus:ring-emerald-500/40" 
+                  placeholder="e.g. UK12345" 
+                />
+                <p className="text-[10px] text-muted-foreground/70 mt-1">Alphanumeric only</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Production Route</label>
+                <select 
+                  value={form.production_route} 
+                  onChange={(e) => update("production_route", e.target.value)}
+                  className="w-full mt-1 px-4 py-2.5 rounded-lg bg-background border border-border text-sm text-foreground outline-none focus:ring-2 focus:ring-emerald-500/40"
+                >
+                  <option value="">Select route...</option>
+                  <option value="BF-BOF">BF-BOF (Blast Furnace)</option>
+                  <option value="EAF-scrap">EAF-scrap (Electric Arc)</option>
+                  <option value="DRI">DRI (Direct Reduced Iron)</option>
+                  <option value="Smelting-electrolysis">Smelting-electrolysis</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="text-xs font-medium text-muted-foreground">Import Type</label>
             <div className="grid grid-cols-3 gap-2 mt-1">
@@ -259,7 +316,7 @@ export default function AddImportPage() {
         </div>
       )}
 
-      {/* Step 3: Emissions Data */}
+      
       {step === 3 && (
         <div className="space-y-4">
           <div>
@@ -305,14 +362,14 @@ export default function AddImportPage() {
                   </div>
                 </div>
               )}
-              {/* Live savings preview */}
+              
               {previewCalc && parseFloat(previewCalc.saving) > 0 && (
                 <SavingsCallout data_source={form.data_source} potential_saving_gbp={previewCalc.saving} />
               )}
             </>
           )}
 
-          {/* Carbon price deduction */}
+          
           <div className="border-t border-border pt-4">
             <label className="text-xs font-medium text-muted-foreground">Carbon Price Deduction (£ GBP)</label>
             <input type="number" step="0.01" value={form.carbon_price_deduction_gbp}
@@ -339,10 +396,10 @@ export default function AddImportPage() {
         </div>
       )}
 
-      {/* Step 4: Review & Save */}
+      
       {step === 4 && selectedProduct && etsPrice && (
         <div className="space-y-6">
-          {/* Summary */}
+          
           <div className="bg-card shadow-sm rounded-xl border border-border p-4 space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Product</span><span className="text-foreground">{selectedProduct.commodity_code} — {selectedProduct.description}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Sector</span><span className="text-foreground capitalize">{selectedProduct.sector}</span></div>
@@ -353,7 +410,7 @@ export default function AddImportPage() {
             <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span className="text-foreground capitalize">{form.import_type.replace("_", " ")}</span></div>
           </div>
 
-          {/* Formula Breakdown */}
+          
           <FormulaBreakdown
             quantity_tonnes={form.quantity_tonnes}
             emissions_intensity={
@@ -383,7 +440,7 @@ export default function AddImportPage() {
         </div>
       )}
 
-      {/* Navigation buttons */}
+      
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <button onClick={() => step > 1 ? setStep(step - 1) : navigate("/CBAMManager")}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-background transition-all">

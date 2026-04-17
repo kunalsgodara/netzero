@@ -8,7 +8,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: Optional[str] = None
-    org_name: str  # Required — creates the org on register
+    org_name: str  
 
 
 class UserLogin(BaseModel):
@@ -38,3 +38,22 @@ class TokenResponse(BaseModel):
 class TokenData(BaseModel):
     user_id: str
     org_id: Optional[str] = None
+
+
+class OTPVerify(BaseModel):
+    email: EmailStr
+    otp: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str
+
+
+class ResendOTPRequest(BaseModel):
+    email: EmailStr

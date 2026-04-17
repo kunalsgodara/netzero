@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { FlaskConical, Sparkles, RefreshCw, Plus, X, TrendingDown } from "lucide-react";
 
-const db = globalThis.__B44_DB__
+import db from "@/api/client"
 
 const LEVERS = [
   { id: "renewables", name: "Switch to Renewables", default_pct: 30, scope: "scope_2" },

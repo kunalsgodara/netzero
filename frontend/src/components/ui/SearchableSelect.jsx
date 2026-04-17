@@ -1,18 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check, Search } from "lucide-react";
 
-/**
- * SearchableSelect – a themed, searchable dropdown.
- *
- * Props:
- *   value        – currently selected value (string)
- *   onChange     – called with the new value (string)
- *   options      – array of { value, label, sublabel? }
- *   placeholder  – trigger placeholder text
- *   searchPlaceholder – search box placeholder
- *   disabled     – boolean
- *   className    – extra classes for the wrapper div
- */
+
 export default function SearchableSelect({
   value = "",
   onChange,
@@ -28,14 +17,14 @@ export default function SearchableSelect({
   const containerRef = useRef(null);
   const searchRef = useRef(null);
 
-  // Focus search box when opening
+  
   useEffect(() => {
     if (open && searchRef.current) {
       searchRef.current.focus();
     }
   }, [open]);
 
-  // Close on outside click
+  
   useEffect(() => {
     const handler = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
@@ -72,7 +61,7 @@ export default function SearchableSelect({
 
   return (
     <div ref={containerRef} className={`relative w-full ${className}`} style={{ userSelect: "none" }}>
-      {/* ── Trigger ───────────────────────────────────────────────── */}
+      
       <button
         type="button"
         disabled={disabled}
@@ -116,7 +105,7 @@ export default function SearchableSelect({
         />
       </button>
 
-      {/* ── Dropdown Panel ────────────────────────────────────────── */}
+      
       {open && (
         <div
           style={{
@@ -133,7 +122,7 @@ export default function SearchableSelect({
             animation: "ssDropdown 0.15s ease",
           }}
         >
-          {/* Search box */}
+          
           <div
             style={{
               display: "flex",
@@ -162,7 +151,7 @@ export default function SearchableSelect({
             />
           </div>
 
-          {/* Options list */}
+          
           <div style={{ maxHeight: "220px", overflowY: "auto" }}>
             {filtered.length === 0 ? (
               <div style={{ padding: "0.5rem 0.75rem", fontSize: "0.8rem", color: "hsl(215.4 16.3% 46.9%)" }}>

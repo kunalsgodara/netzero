@@ -3,7 +3,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3 } from "lucide-react";
 
-const db = globalThis.__B44_DB__
+import db from "@/api/client"
 
 const INDUSTRY_BENCHMARKS = {
   manufacturing: { scope1: 420, scope2: 290, scope3: 180, unit: "kgCO₂e/£1000 revenue" },
@@ -42,23 +42,25 @@ export default function Benchmarking() {
 
   const revenue = org?.revenue_gbp_m || 1;
   const yourIntensities = {
-    scope1: (scope1 * 1000) / revenue,
-    scope2: (scope2 * 1000) / revenue,
-    scope3: (scope3 * 1000) / revenue,
-    total: (total * 1000) / revenue,
+    scope1: revenue > 0 ? (scope1 * 1000) / revenue : 0,
+    scope2: revenue > 0 ? (scope2 * 1000) / revenue : 0,
+    scope3: revenue > 0 ? (scope3 * 1000) / revenue : 0,
+    total: revenue > 0 ? (total * 1000) / revenue : 0,
   };
   const benchTotal = benchmark.scope1 + benchmark.scope2 + benchmark.scope3;
 
   const CompareBar = ({ label, yours, industry }) => {
     const max = Math.max(yours, industry, 1);
+    const yoursWidth = max > 0 ? (yours / max) * 100 : 0;
+    const industryWidth = max > 0 ? (industry / max) * 100 : 0;
     return (
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs"><span className="font-medium">{label}</span><span className="text-muted-foreground">{yours.toFixed(0)} vs {industry} {benchmark.unit}</span></div>
         <div className="flex gap-1 h-6">
-          <div className="bg-primary/20 rounded-l-lg relative" style={{ width: `${(yours / max) * 100}%` }}>
+          <div className="bg-primary/20 rounded-l-lg relative" style={{ width: `${yoursWidth}%` }}>
             <div className="absolute inset-0 bg-primary rounded-l-lg" style={{ opacity: 0.7 }} /><span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-primary-foreground font-semibold">You</span>
           </div>
-          <div className="bg-muted rounded-r-lg relative" style={{ width: `${(industry / max) * 100}%` }}>
+          <div className="bg-muted rounded-r-lg relative" style={{ width: `${industryWidth}%` }}>
             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-medium">Industry</span>
           </div>
         </div>
@@ -66,7 +68,9 @@ export default function Benchmarking() {
     );
   };
 
-  const performanceScore = Math.max(0, Math.min(100, Math.round(100 - ((yourIntensities.total / benchTotal) * 100 - 100))));
+  const performanceScore = benchTotal > 0 
+    ? Math.max(0, Math.min(100, Math.round(100 - ((yourIntensities.total / benchTotal) * 100 - 100))))
+    : 0;
 
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">

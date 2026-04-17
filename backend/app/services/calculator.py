@@ -63,9 +63,9 @@ def calculate_cbam_liability(
         CalculationResult with all computed fields
     """
 
-    # ── Step 4: returned_goods → liability = 0, exempt ──────────
+    
     if import_type == "returned_goods":
-        # Default liability still computed for reference
+        
         default_embedded = _quantize(quantity_tonnes * emissions_intensity_default)
         default_liability = _quantize(default_embedded * uk_ets_rate, 2)
         return CalculationResult(
@@ -79,33 +79,33 @@ def calculate_cbam_liability(
             exemption_reason="Returned goods — re-imported within 3 years, unaltered. Exempt per UK CBAM regulations.",
         )
 
-    # ── Step 3: determine intensity ─────────────────────────────
+    
     if data_source in ("actual_unverified", "actual_verified") and emissions_intensity_actual is not None:
         intensity = emissions_intensity_actual
     else:
         intensity = emissions_intensity_default
 
-    # ── Step 5: embedded emissions ──────────────────────────────
+    
     embedded_emissions = _quantize(quantity_tonnes * intensity)
 
-    # ── Step 6: deduction in tCO2e ──────────────────────────────
+    
     if uk_ets_rate > 0 and carbon_price_deduction_gbp > 0:
         deduction_tco2e = _quantize(carbon_price_deduction_gbp / uk_ets_rate)
     else:
         deduction_tco2e = Decimal("0")
 
-    # ── Step 7: net emissions ───────────────────────────────────
+    
     net_emissions = max(Decimal("0"), embedded_emissions - deduction_tco2e)
 
-    # ── Step 8: CBAM liability ──────────────────────────────────
+    
     cbam_liability = _quantize(net_emissions * uk_ets_rate, 2)
 
-    # ── Step 9: ALWAYS compute default liability ────────────────
+    
     default_embedded = _quantize(quantity_tonnes * emissions_intensity_default)
     default_net = max(Decimal("0"), default_embedded - deduction_tco2e)
     cbam_liability_default = _quantize(default_net * uk_ets_rate, 2)
 
-    # ── Step 10: potential saving ───────────────────────────────
+    
     potential_saving = _quantize(cbam_liability_default - cbam_liability, 2)
 
     return CalculationResult(

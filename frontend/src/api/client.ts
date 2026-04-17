@@ -1,12 +1,8 @@
-/**
- * Legacy compatibility shim.
- * Pages still using globalThis.__B44_DB__ will work via this file.
- * New code should use hooks (useEmissions, useCBAM etc.) instead.
- */
-import { httpFetch, getToken, clearTokens, setToken } from '@/services/httpClient';
 
-// Re-export for any direct imports
-export { httpFetch as apiFetch, getToken, clearTokens, setToken };
+import { httpFetch, getToken, getRefreshToken, setRefreshToken, clearTokens, setToken } from '@/services/httpClient';
+
+
+export { httpFetch as apiFetch, getToken, getRefreshToken, setRefreshToken, clearTokens, setToken };
 
 interface EntityClient {
   list: (orderBy?: string, limit?: number) => Promise<unknown[]>;

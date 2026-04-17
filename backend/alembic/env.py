@@ -15,7 +15,7 @@ from app.config.database import Base
 from app.models import (  # noqa: F401
     User, Organization, EmissionActivity, EmissionFactor, Report,
     Organisation, UKCBAMProduct, UKETSPrice,
-    Supplier, Import, AuditLog, CBAMReport,
+    Supplier, Import, AuditLog, CBAMReport, ComplianceDeadline,
 )
 
 # this is the Alembic Config object

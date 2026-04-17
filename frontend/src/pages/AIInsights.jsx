@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import LABELS from "@/utils/labels";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
@@ -7,7 +8,7 @@ import {
   BarChart3, Leaf, Zap, Clock, ChevronDown, ChevronUp, Info, XCircle,
 } from "lucide-react";
 
-// ── API helpers ───────────────────────────────────────────────────────────────
+
 function authHeaders() {
   const token = localStorage.getItem("access_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -35,7 +36,7 @@ async function callLLM(prompt, response_json_schema) {
   return res.json();
 }
 
-// ── Config ────────────────────────────────────────────────────────────────────
+
 
 const SEVERITY_CONFIG = {
   low: {
@@ -88,7 +89,7 @@ const ACTION_TYPE_CONFIG = {
   EMISSIONS: { label: "Review Emissions", icon: <Zap className="w-3 h-3" />, route: "/Emissions" },
 };
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+
 
 function AnomalyCard({ anomaly }) {
   const [expanded, setExpanded] = useState(false);
@@ -166,7 +167,7 @@ function RecommendationCard({ rec, navigate }) {
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+
 
 export default function AIInsights() {
   const [insights, setInsights] = useState(() => {
@@ -212,7 +213,7 @@ export default function AIInsights() {
 
     const hasData = activities.length > 0 || imports.length > 0;
 
-    const prompt = `You are a senior AI carbon compliance advisor for a carbon management platform called NetZeroWorks.
+    const prompt = `You are a senior AI carbon compliance advisor for a carbon management platform called ${LABELS.BRAND_NAME}.
 
 ${hasData
   ? `COMPANY DATA:
@@ -258,11 +259,11 @@ RULES (strictly enforced):
 - action_type must be one of: PLANNER, CBAM, EMISSIONS
 - difficulty must be one of: low, medium, hard`;
 
-    const schema = null; // schema enforcement handled by prompt structure
+    const schema = null; 
 
     try {
       const result = await callLLM(prompt, schema);
-      // If backend couldn't parse JSON and returned raw_response, try again client-side
+      
       let parsedInsights = null;
       if (result.raw_response || result.response) {
         const raw = result.raw_response || result.response;
@@ -270,7 +271,7 @@ RULES (strictly enforced):
           const cleaned = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
           parsedInsights = JSON.parse(cleaned);
         } catch {
-          parsedInsights = result; // show raw fallback
+          parsedInsights = result; 
         }
       } else {
         parsedInsights = result;
@@ -292,7 +293,7 @@ RULES (strictly enforced):
     <div className="h-screen flex flex-col">
       <div className="flex-1 overflow-auto">
         <div className="p-6 lg:p-8 max-w-[1400px] mx-auto h-full flex flex-col">
-      {/* Header */}
+      
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -313,7 +314,7 @@ RULES (strictly enforced):
         </button>
       </div>
 
-      {/* Error Banner */}
+      
       {error && !loading && (
         <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
           <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
@@ -334,7 +335,7 @@ RULES (strictly enforced):
         </div>
       )}
 
-      {/* Empty state */}
+      
       {!insights && !loading && !error && (
         <div className="flex-1 flex items-center justify-center">
           <div className="border-2 border-dashed border-border rounded-xl py-16 px-8 text-center max-w-md">
@@ -347,7 +348,7 @@ RULES (strictly enforced):
         </div>
       )}
 
-      {/* Loading skeleton */}
+      
       {loading && (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
@@ -362,10 +363,10 @@ RULES (strictly enforced):
         </div>
       )}
 
-      {/* Generated Insights */}
+      
       {insights && !loading && (
         <div className="space-y-5">
-          {/* Overall summary */}
+          
           {insights.overall_summary && (
             <div className="bg-card border border-border rounded-xl p-5">
               <div className="flex items-center gap-2 mb-2">
@@ -376,7 +377,7 @@ RULES (strictly enforced):
             </div>
           )}
 
-          {/* Compliance status + key metrics */}
+          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {insights.compliance_status && complianceCfg && (
               <div className={`bg-card rounded-xl p-5 ${complianceCfg.style}`}>
@@ -417,7 +418,7 @@ RULES (strictly enforced):
             )}
           </div>
 
-          {/* Anomalies + Recommendations */}
+          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div className="bg-card border border-border rounded-xl p-5">
               <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
@@ -459,7 +460,7 @@ RULES (strictly enforced):
             </div>
           </div>
 
-          {/* CBAM Guidance */}
+          
           {insights.cbam_guidance && (
             <div className="bg-card border border-border rounded-xl p-5">
               <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
@@ -475,7 +476,7 @@ RULES (strictly enforced):
             </div>
           )}
 
-          {/* Re-generate */}
+          
           <div className="pt-1 flex justify-end">
             <button
               onClick={generateInsights}
