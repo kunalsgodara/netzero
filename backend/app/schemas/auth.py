@@ -8,6 +8,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: Optional[str] = None
+    org_name: str  
 
 
 class UserLogin(BaseModel):
@@ -19,6 +20,8 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     full_name: Optional[str] = None
+    org_id: Optional[uuid.UUID] = None
+    role: str = "member"
     is_active: bool = True
     created_at: datetime
 
@@ -34,3 +37,23 @@ class TokenResponse(BaseModel):
 
 class TokenData(BaseModel):
     user_id: str
+    org_id: Optional[str] = None
+
+
+class OTPVerify(BaseModel):
+    email: EmailStr
+    otp: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str
+
+
+class ResendOTPRequest(BaseModel):
+    email: EmailStr

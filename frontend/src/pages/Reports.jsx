@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 
 import { format, subMonths, startOfMonth } from "date-fns";
+import { toast } from "sonner";
 import Select from "@/components/ui/Select";
 import {
   useReports, useGenerateReport, useUpdateReport,
@@ -50,10 +51,10 @@ function computeDateRange(months) {
 }
 
 export default function Reports() {
-  // ── State ─────────────────────────────────────────────────────────────
+  
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ title: "", type: "secr", period: "" });
-  const [selectedPreset, setSelectedPreset] = useState(0); // All Time
+  const [selectedPreset, setSelectedPreset] = useState(0); 
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -61,7 +62,7 @@ export default function Reports() {
   const [exportingId, setExportingId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // ── Queries & Mutations ───────────────────────────────────────────────
+  
   const { data: reportsData, isLoading } = useReports(currentPage, 3);
   const reports = reportsData?.items || [];
   const pagination = {
@@ -76,7 +77,7 @@ export default function Reports() {
   const updateMutation = useUpdateReport();
   const deleteMutation = useDeleteReport();
 
-  // ── Computed date range ───────────────────────────────────────────────
+  
   const dateRange = useMemo(() => {
     if (customStart && customEnd) {
       return { start: customStart, end: customEnd };
@@ -85,7 +86,7 @@ export default function Reports() {
     return computeDateRange(preset?.months || 0);
   }, [selectedPreset, customStart, customEnd]);
 
-  // ── Filtered reports ──────────────────────────────────────────────────
+  
   const filteredReports = useMemo(() => {
     let filtered = reports;
     if (typeFilter !== "all") {
@@ -94,7 +95,7 @@ export default function Reports() {
     return filtered;
   }, [reports, typeFilter]);
 
-  // ── Handlers ──────────────────────────────────────────────────────────
+  
   const handleCreate = useCallback(async (e) => {
     e.preventDefault();
     const periodLabel = customStart && customEnd
@@ -110,7 +111,7 @@ export default function Reports() {
     });
     setShowCreate(false);
     setForm({ title: "", type: "secr", period: "" });
-    setCurrentPage(1); // Reset to first page after creating
+    setCurrentPage(1); 
   }, [form, dateRange, selectedPreset, customStart, customEnd, generateMutation]);
 
   const handleDownloadPdf = useCallback(async (report) => {
@@ -140,7 +141,7 @@ export default function Reports() {
         exportUtils.exportToXLS(data, meta);
       }
     } catch (err) {
-      console.error("Export failed:", err);
+      toast.error("Export failed. Please try again.");
     }
     setExportingId(null);
   }, []);
@@ -161,12 +162,12 @@ export default function Reports() {
     setCustomEnd("");
   }, []);
 
-  // ── Render ────────────────────────────────────────────────────────────
+  
   return (
     <div className="h-screen flex flex-col">
       <div className="flex-1 overflow-auto">
         <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
-      {/* Header */}
+      
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -185,9 +186,9 @@ export default function Reports() {
         </button>
       </div>
 
-      {/* ── Filter Bar ────────────────────────────────────────────────── */}
+      
       <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-        {/* Period presets */}
+        
         <div className="flex flex-wrap items-center gap-2">
           <Calendar className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs font-medium text-muted-foreground mr-1">Period:</span>
@@ -230,7 +231,7 @@ export default function Reports() {
           </div>
         </div>
 
-        {/* Type filter */}
+        
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs font-medium text-muted-foreground mr-1">Type:</span>
@@ -255,7 +256,7 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* ── Create Report Modal ───────────────────────────────────────── */}
+      
       {showCreate && (
         <div className="bg-card border border-border rounded-xl p-6 shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center justify-between mb-4">
@@ -336,7 +337,7 @@ export default function Reports() {
         </div>
       )}
 
-      {/* ── Reports Grid ──────────────────────────────────────────────── */}
+      
       {isLoading ? (
         <div className="flex items-center justify-center py-20 text-muted-foreground">
           <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading reports…
@@ -369,7 +370,7 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* Pagination Controls - Sticky footer */}
+      
       {!showCreate && pagination.totalPages > 1 && (
         <div className="bg-background">
           <div className="p-3 lg:p-4 max-w-[1400px] mx-auto">
@@ -406,14 +407,14 @@ export default function Reports() {
   );
 }
 
-// ─── Report Card Component ──────────────────────────────────────────────────
+
 
 function ReportCard({ report: r, downloadingId, exportingId, onDownloadPdf, onExport, onSubmit, onDelete }) {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 space-y-3 hover:shadow-md transition-all duration-200 group">
-      {/* Header */}
+      
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-foreground truncate">{r.title}</h3>
@@ -426,7 +427,7 @@ function ReportCard({ report: r, downloadingId, exportingId, onDownloadPdf, onEx
         </span>
       </div>
 
-      {/* Metrics */}
+      
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="bg-muted/30 rounded-lg p-2">
           <p className="text-muted-foreground text-[10px] uppercase tracking-wide">Emissions</p>
@@ -442,13 +443,13 @@ function ReportCard({ report: r, downloadingId, exportingId, onDownloadPdf, onEx
         </div>
       </div>
 
-      {/* Actions */}
+      
       <div className="flex items-center justify-between pt-2 border-t border-border">
         <span className="text-[10px] text-muted-foreground">
           {r.created_date ? format(new Date(r.created_date), "MMM d, yyyy") : ""}
         </span>
         <div className="flex items-center gap-1">
-          {/* PDF Download — available for generated + submitted */}
+          
           {(r.status === "generated" || r.status === "submitted") && (
             <button
               onClick={() => onDownloadPdf(r)}
@@ -466,7 +467,7 @@ function ReportCard({ report: r, downloadingId, exportingId, onDownloadPdf, onEx
             </button>
           )}
 
-          {/* Export dropdown — CSV / XLS */}
+          
           {(r.status === "generated" || r.status === "submitted") && (
             <div className="relative">
               <button
@@ -503,7 +504,7 @@ function ReportCard({ report: r, downloadingId, exportingId, onDownloadPdf, onEx
             </div>
           )}
 
-          {/* Submit */}
+          
           {r.status === "generated" && (
             <button
               onClick={() => onSubmit(r)}
@@ -514,7 +515,7 @@ function ReportCard({ report: r, downloadingId, exportingId, onDownloadPdf, onEx
             </button>
           )}
 
-          {/* Delete */}
+          
           <button
             onClick={() => onDelete(r)}
             className="p-1.5 hover:bg-destructive/10 rounded-md transition-colors"

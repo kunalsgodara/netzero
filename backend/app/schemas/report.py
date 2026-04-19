@@ -54,7 +54,7 @@ class ReportGenerateRequest(BaseModel):
     end_date: Optional[date] = None
 
 
-# --- Aggregation response schemas ---
+
 
 class ScopeBreakdown(BaseModel):
     scope: str
@@ -111,14 +111,14 @@ class ReportAggregationResponse(BaseModel):
     """Full aggregation data returned by /preview and /{id}/data endpoints."""
     organization: Optional[OrganizationInfo] = None
 
-    # Emissions
+    
     total_emissions_tco2e: float = 0.0
     scope_breakdown: List[ScopeBreakdown] = []
     category_breakdown: List[CategoryBreakdown] = []
     activities: List[ActivityDetail] = []
     activity_count: int = 0
 
-    # CBAM
+    
     total_cbam_charge_eur: float = 0.0
     total_embedded_emissions_tco2e: float = 0.0
     cbam_category_breakdown: List[CBAMCategoryBreakdown] = []

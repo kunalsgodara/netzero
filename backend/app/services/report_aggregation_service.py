@@ -1,7 +1,7 @@
 """
 Aggregation service for report generation.
 
-Performs time-period-based queries against emission_activities and cbam_imports
+Performs time-period-based queries against emission_activities and UK CBAM imports
 to produce scope/category breakdowns and summary metrics.
 """
 
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, cast, Date
 
 from app.models.emission import EmissionActivity
-from app.models.cbam import CBAMImport
+from app.models.uk_cbam import Import as CBAMImport, UKCBAMProduct
 from app.models.organization import Organization
 from app.schemas.report import (
     ReportAggregationResponse,
@@ -33,11 +33,17 @@ SCOPE_LABELS = {
 
 
 def _date_filter(model, start: Optional[date], end: Optional[date]):
-    """Build a date filter using activity_date / import_date, falling back to created_date."""
+    """Build a date filter using activity_date / import_date, falling back to created_date/created_at."""
     conditions = []
-    fallback_col = model.created_date
+    
+    if hasattr(model, "created_date"):
+        fallback_col = model.created_date
+    elif hasattr(model, "created_at"):
+        fallback_col = model.created_at
+    else:
+        fallback_col = None
 
-    # Use hasattr to detect the correct date column for this model
+    
     if hasattr(model, "activity_date"):
         date_col = model.activity_date
     elif hasattr(model, "import_date"):
@@ -46,13 +52,16 @@ def _date_filter(model, start: Optional[date], end: Optional[date]):
         date_col = None
 
     if start and end and date_col is not None:
-        conditions.append(
-            or_(
-                and_(date_col != None, date_col >= start, date_col <= end),  # noqa: E711
-                and_(date_col == None, cast(fallback_col, Date) >= start, cast(fallback_col, Date) <= end),  # noqa: E711
+        if fallback_col is not None:
+            conditions.append(
+                or_(
+                    and_(date_col != None, date_col >= start, date_col <= end),  
+                    and_(date_col == None, cast(fallback_col, Date) >= start, cast(fallback_col, Date) <= end),  
+                )
             )
-        )
-    elif start and end:
+        else:
+            conditions.append(and_(date_col >= start, date_col <= end))
+    elif start and end and fallback_col is not None:
         conditions.append(
             and_(cast(fallback_col, Date) >= start, cast(fallback_col, Date) <= end)
         )
@@ -91,7 +100,7 @@ async def aggregate_emissions(
     result = await db.execute(base.order_by(EmissionActivity.activity_date.asc().nullslast()))
     activities_list = result.scalars().all()
 
-    # Scope breakdown
+    
     scope_totals = {}
     for a in activities_list:
         s = a.scope or "scope_1"
@@ -108,7 +117,7 @@ async def aggregate_emissions(
             emissions_tco2e=round(val, 2), description=desc,
         ))
 
-    # Category breakdown
+    
     cat_totals = {}
     for a in activities_list:
         cat_key = f"{a.category or 'Other'} ({a.scope})"
@@ -126,7 +135,7 @@ async def aggregate_emissions(
             share_pct=round(share, 1),
         ))
 
-    # Activity details
+    
     activity_details = []
     for a in activities_list:
         activity_details.append(ActivityDetail(
@@ -154,8 +163,17 @@ async def aggregate_cbam(
     end: Optional[date],
     db: AsyncSession,
 ):
-    """Aggregate CBAM imports for a user within a date range."""
-    base = select(CBAMImport).where(CBAMImport.user_id == user_id)
+    """Aggregate UK CBAM imports for a user within a date range.
+
+    NOTE: The new UK CBAM Import model is org-scoped, not user-scoped.
+    To maintain backwards compatibility with SECR reports, we query imports
+    created by this user. Once the frontend is updated to UK CBAM, this
+    should switch to org_id-based querying.
+    """
+    base = select(CBAMImport).where(
+        CBAMImport.created_by == user_id,
+        CBAMImport.is_deleted == False,  
+    )
     date_conds = _date_filter(CBAMImport, start, end)
     if date_conds:
         base = base.where(*date_conds)
@@ -163,41 +181,43 @@ async def aggregate_cbam(
     result = await db.execute(base.order_by(CBAMImport.import_date.asc().nullslast()))
     imports_list = result.scalars().all()
 
-    total_charge = sum(i.cbam_charge_eur or 0.0 for i in imports_list)
-    total_embedded = sum(i.embedded_emissions or 0.0 for i in imports_list)
-    pending = sum(1 for i in imports_list if i.declaration_status == "pending")
+    total_charge = sum(float(i.cbam_liability_gbp or 0) for i in imports_list)
+    total_embedded = sum(float(i.embedded_emissions_tco2e or 0) for i in imports_list)
 
-    # Category breakdown
-    cat_map = {}
+    
+    sector_map = {}
     for i in imports_list:
-        cat = i.category
-        if cat not in cat_map:
-            cat_map[cat] = {"qty": 0.0, "emissions": 0.0, "charge": 0.0}
-        cat_map[cat]["qty"] += i.quantity_tonnes or 0.0
-        cat_map[cat]["emissions"] += i.embedded_emissions or 0.0
-        cat_map[cat]["charge"] += i.cbam_charge_eur or 0.0
+        
+        sector = "unknown"
+        if i.product:
+            sector = i.product.sector
+        if sector not in sector_map:
+            sector_map[sector] = {"qty": 0.0, "emissions": 0.0, "charge": 0.0}
+        sector_map[sector]["qty"] += float(i.quantity_tonnes or 0)
+        sector_map[sector]["emissions"] += float(i.embedded_emissions_tco2e or 0)
+        sector_map[sector]["charge"] += float(i.cbam_liability_gbp or 0)
 
     cbam_category_breakdown = [
         CBAMCategoryBreakdown(
-            category=cat,
+            category=sector,
             total_qty_tonnes=round(data["qty"], 1),
             embedded_emissions_tco2e=round(data["emissions"], 2),
-            cbam_charge_eur=round(data["charge"], 2),
+            cbam_charge_eur=round(data["charge"], 2),  
         )
-        for cat, data in sorted(cat_map.items(), key=lambda x: -x[1]["charge"])
+        for sector, data in sorted(sector_map.items(), key=lambda x: -x[1]["charge"])
     ]
 
-    # Import details
+    
     cbam_imports = [
         CBAMImportDetail(
-            product_name=i.product_name,
-            hscn_code=i.hscn_code,
-            origin_country=i.origin_country,
-            supplier_name=i.supplier_name,
-            quantity_tonnes=i.quantity_tonnes,
-            embedded_emissions=round(i.embedded_emissions or 0.0, 2),
-            cbam_charge_eur=round(i.cbam_charge_eur or 0.0, 2),
-            declaration_status=i.declaration_status or "pending",
+            product_name=i.product.description if i.product else "Unknown",
+            hscn_code=i.product.commodity_code if i.product else "",
+            origin_country=i.country_of_origin,
+            supplier_name=i.supplier.name if i.supplier else None,
+            quantity_tonnes=float(i.quantity_tonnes or 0),
+            embedded_emissions=round(float(i.embedded_emissions_tco2e or 0), 2),
+            cbam_charge_eur=round(float(i.cbam_liability_gbp or 0), 2),
+            declaration_status="pending",
         )
         for i in imports_list
     ]
@@ -208,7 +228,7 @@ async def aggregate_cbam(
         "cbam_category_breakdown": cbam_category_breakdown,
         "cbam_imports": cbam_imports,
         "cbam_import_count": len(imports_list),
-        "pending_declarations": pending,
+        "pending_declarations": 0,
     }
 
 

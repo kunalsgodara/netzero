@@ -1,32 +1,56 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, ShieldCheck, Activity, FileText, Sparkles,
-  LogOut, Leaf, BarChart3, FlaskConical,
+  LogOut, BarChart3, FlaskConical, Calculator, Package,
 } from "lucide-react";
 import { createPageUrl } from "@/utils/routes";
+import { clearTokens, ROUTES } from "@/services/httpClient";
+import CompanyLogo from "@/components/ui/CompanyLogo";
+import LABELS from "@/utils/labels";
 
 const navItems = [
-  { name: "Dashboard",       icon: LayoutDashboard, page: "Dashboard" },
-  { name: "CBAM Manager",    icon: ShieldCheck,     page: "CBAMManager" },
-  { name: "Emissions",       icon: Activity,        page: "Emissions" },
-  { name: "Reports",         icon: FileText,        page: "Reports" },
-  { name: "AI Insights",     icon: Sparkles,        page: "AIInsights" },
-  { name: "Benchmarking",    icon: BarChart3,        page: "Benchmarking" },
-  { name: "Scenario Planner",icon: FlaskConical,    page: "ScenarioPlanner" },
+  { name: "Dashboard",        icon: LayoutDashboard, page: "Dashboard" },
+  { name: "UK CBAM",          icon: ShieldCheck,     page: "CBAMManager" },
+  { name: "CBAM Calculator",  icon: Calculator,      page: "UKCBAMCalculator" },
+  { name: "Products Reference", icon: Package,       page: "UKCBAMProducts" },
+  { name: "Emissions",        icon: Activity,        page: "Emissions" },
+  { name: "Reports",          icon: FileText,        page: "Reports" },
+  { name: "AI Insights",      icon: Sparkles,        page: "AIInsights" },
+  { name: "Benchmarking",     icon: BarChart3,       page: "Benchmarking" },
+  { name: "Scenario Planner", icon: FlaskConical,    page: "ScenarioPlanner" },
 ];
 
-export default function Sidebar({ collapsed, currentPageName, user, onClose }) {
+interface SidebarProps {
+  collapsed: boolean;
+  currentPageName: string;
+  user: { full_name?: string; email?: string } | null;
+  onClose?: () => void;
+}
+
+export default function Sidebar({ collapsed, currentPageName, user, onClose }: SidebarProps) {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    
+    
+    clearTokens();
+    navigate(ROUTES.HOME);
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-5 py-6 border-b border-sidebar-border">
-        <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center flex-shrink-0">
-          <Leaf className="w-5 h-5 text-sidebar-primary-foreground" />
+        <div className="flex items-center justify-center flex-shrink-0">
+          <CompanyLogo size={36} />
         </div>
         {!collapsed && (
           <div className="overflow-hidden">
-            <h1 className="text-base font-bold text-sidebar-accent-foreground tracking-tight">NetZeroWorks</h1>
-            <p className="text-[10px] text-sidebar-foreground uppercase tracking-widest">Carbon Platform</p>
+            <h1 className="text-base font-bold text-sidebar-accent-foreground tracking-tight">
+              {LABELS.BRAND_NAME}
+            </h1>
+            <p className="text-[10px] text-sidebar-foreground uppercase tracking-widest">
+              {LABELS.BRAND_SUBTITLE}
+            </p>
           </div>
         )}
       </div>
@@ -66,7 +90,7 @@ export default function Sidebar({ collapsed, currentPageName, user, onClose }) {
           </div>
         )}
         <button
-          onClick={() => { localStorage.removeItem("access_token"); window.location.href = "/"; }}
+          onClick={handleLogout}
           className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors w-full ${collapsed ? "justify-center" : ""}`}
         >
           <LogOut className="w-4 h-4 flex-shrink-0" />

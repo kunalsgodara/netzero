@@ -30,4 +30,4 @@ class Organization(Base):
         ),
     )
 
-    user = relationship("User", back_populates="organizations")
+    user = relationship("User", back_populates="organisations_owned")

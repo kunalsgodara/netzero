@@ -1,11 +1,13 @@
 import React, { useState } from "react";
+import LABELS from "@/utils/labels";
 
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils/routes";
-import { Leaf, ArrowRight, ArrowLeft, Building2, Target, CheckCircle2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, Building2, Target, CheckCircle2 } from "lucide-react";
+import CompanyLogo from "@/components/ui/CompanyLogo";
 import Select from "@/components/ui/Select";
 
-const db = globalThis.__B44_DB__
+import db from "@/api/client"
 
 const steps = [
   { title: "Your Organization", icon: Building2 },
@@ -30,8 +32,8 @@ export default function Onboarding() {
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <div className="w-full max-w-lg">
         <div className="flex items-center gap-3 justify-center mb-10">
-          <div className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center"><Leaf className="w-6 h-6 text-primary-foreground" /></div>
-          <div><h1 className="text-xl font-bold text-foreground">NetZeroWorks</h1><p className="text-[10px] text-muted-foreground uppercase tracking-widest">Setup Guide</p></div>
+          <CompanyLogo size={44} />
+          <div><h1 className="text-xl font-bold text-foreground">{LABELS.BRAND_NAME}</h1><p className="text-[10px] text-muted-foreground uppercase tracking-widest">Setup Guide</p></div>
         </div>
         <div className="flex items-center justify-center gap-2 mb-8">
           {steps.map((s, i) => (

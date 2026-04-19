@@ -16,7 +16,7 @@ export function useEtsPrice() {
   return useQuery({
     queryKey: ETS_PRICE_KEY,
     queryFn: () => cbamService.getEtsPrice(),
-    staleTime: 1000 * 60 * 60, // 1 hour
+    staleTime: 1000 * 60 * 60, 
   });
 }
 

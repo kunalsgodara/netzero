@@ -2,9 +2,9 @@ import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Activity, Filter, Edit3, Trash2, Zap, ChevronLeft, ChevronRight } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
-import { useToast, ToastContainer } from "@/components/ui/Toast";
+import { useToast } from "@/hooks/useToast";
 
-const db = globalThis.__B44_DB__
+import db from "@/api/client"
 
 const SCOPE_LABELS = { scope_1: "Scope 1", scope_2: "Scope 2", scope_3: "Scope 3" };
 const SCOPE_COLORS = {
@@ -23,6 +23,8 @@ export default function Emissions() {
   const [editing, setEditing] = useState(null);
   const [scopeFilter, setScopeFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
   const [form, setForm] = useState(EMPTY_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -52,7 +54,7 @@ export default function Emissions() {
   }, [rawFactors]);
 
   const { data: activitiesData } = useQuery({
-    queryKey: ["emissions", currentPage, scopeFilter, categoryFilter],
+    queryKey: ["emissions", currentPage, scopeFilter, categoryFilter, monthFilter, yearFilter],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(currentPage),
@@ -61,6 +63,8 @@ export default function Emissions() {
       });
       if (scopeFilter !== "all") params.set("scope", scopeFilter);
       if (categoryFilter !== "all") params.set("category", categoryFilter);
+      if (monthFilter !== "all") params.set("month", monthFilter);
+      if (yearFilter !== "all") params.set("year", yearFilter);
       
       const res = await fetch(`/api/v1/emission-activities?${params.toString()}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
@@ -201,7 +205,7 @@ export default function Emissions() {
     <div className="h-screen flex flex-col">
       <div className="flex-1 overflow-auto">
         <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
-          <ToastContainer toasts={toasts} onRemove={removeToast} />
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -331,7 +335,7 @@ export default function Emissions() {
             </div>
             <div className="bg-card border border-border rounded-lg p-4">
               <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Avg per Activity</p>
-              <p className="text-2xl font-bold text-foreground mt-1">{pagination.total ? ((totalTCO2e / pagination.total) * 1000).toFixed(0) : 0} <span className="text-sm font-normal">kgCO₂e</span></p>
+              <p className="text-2xl font-bold text-foreground mt-1">{pagination.total > 0 ? ((totalTCO2e / pagination.total) * 1000).toFixed(0) : 0} <span className="text-sm font-normal">kgCO₂e</span></p>
             </div>
           </div>
 
@@ -359,6 +363,40 @@ export default function Emissions() {
                 />
               </div>
             )}
+            <div className="w-36">
+              <CustomSelect
+                value={monthFilter}
+                onChange={(val) => { setMonthFilter(val); setCurrentPage(1); }}
+                options={[
+                  { value: "all", label: "All Months" },
+                  { value: "1", label: "January" },
+                  { value: "2", label: "February" },
+                  { value: "3", label: "March" },
+                  { value: "4", label: "April" },
+                  { value: "5", label: "May" },
+                  { value: "6", label: "June" },
+                  { value: "7", label: "July" },
+                  { value: "8", label: "August" },
+                  { value: "9", label: "September" },
+                  { value: "10", label: "October" },
+                  { value: "11", label: "November" },
+                  { value: "12", label: "December" }
+                ]}
+              />
+            </div>
+            <div className="w-32">
+              <CustomSelect
+                value={yearFilter}
+                onChange={(val) => { setYearFilter(val); setCurrentPage(1); }}
+                options={[
+                  { value: "all", label: "All Years" },
+                  ...Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(year => ({
+                    value: String(year),
+                    label: String(year)
+                  }))
+                ]}
+              />
+            </div>
           </div>
 
           <div className="bg-card border border-border rounded-xl overflow-hidden">

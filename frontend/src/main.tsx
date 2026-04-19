@@ -1,4 +1,4 @@
-import '@/api/client'; // Initialize API client and inject globalThis.__B44_DB__
+import '@/api/client'; 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

@@ -1,5 +1,7 @@
 import React from "react";
-import { Leaf, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
+import CompanyLogo from "@/components/ui/CompanyLogo";
+import LABELS from "@/utils/labels";
 
 export default function MobileHeader({ onMenuOpen }) {
   return (
@@ -8,8 +10,8 @@ export default function MobileHeader({ onMenuOpen }) {
         <Menu className="w-5 h-5" />
       </button>
       <div className="flex items-center gap-2">
-        <Leaf className="w-5 h-5 text-primary" />
-        <span className="font-bold text-sm">NetZeroWorks</span>
+        <CompanyLogo size={22} />
+        <span className="font-bold text-sm">{LABELS.BRAND_NAME}</span>
       </div>
       <div className="w-9" />
     </div>

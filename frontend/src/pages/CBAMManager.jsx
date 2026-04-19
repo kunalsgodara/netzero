@@ -4,11 +4,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, ShieldCheck, Filter, Edit3, Trash2, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
 import SearchableSelect from "@/components/ui/SearchableSelect";
-import { useToast, ToastContainer } from "@/components/ui/Toast";
+import { useToast } from "@/hooks/useToast";
 
-const db = globalThis.__B44_DB__
+import db from "@/api/client"
 
-// CBAM categories -> DB keys
+
 const CATEGORY_LABELS = {
   cement: "Cement",
   iron_steel: "Iron & Steel",
@@ -61,13 +61,13 @@ export default function CBAMManager() {
   const queryClient = useQueryClient();
   const clearFieldError = (field) => setFieldErrors(p => ({ ...p, [field]: false }));
 
-  // ─── Fetch all emission factors, filter to CBAM scope ───────────
+  
   const { data: rawFactors = [], isLoading: isLoadingFactors } = useQuery({
     queryKey: ["emission_factors_cbam"],
     queryFn: () => fetch("/api/v1/emission-factors/cbam").then(r => r.json()),
   });
 
-  // Build CBAM taxonomy and associative arrays for mapping
+  
   const { taxonomy, allHscn, hscnMap } = useMemo(() => {
     const tax = {};
     const list = [];
@@ -91,7 +91,7 @@ export default function CBAMManager() {
     return { taxonomy: tax, allHscn: list, hscnMap: map };
   }, [rawFactors]);
 
-  // Options for the datalist (filtered if category is selected)
+  
   const currentHscnOptions = useMemo(() => {
     if (form.category && taxonomy[form.category]) {
       return Object.values(taxonomy[form.category]);
@@ -99,17 +99,17 @@ export default function CBAMManager() {
     return allHscn;
   }, [form.category, taxonomy, allHscn]);
 
-  // ─── Fetch CBAM EU ETS Price ─────────────────────────────────────
+  
   const { data: currentEtsPrice } = useQuery({
     queryKey: ["cbam-eu-ets-price"],
     queryFn: async () => {
       const res = await fetch("/api/v1/cbam-imports/eu-ets-price");
       return res.json();
     },
-    staleTime: 1000 * 60 * 60, // 1 hour
+    staleTime: 1000 * 60 * 60, 
   });
 
-  // ─── Fetch CBAM imports ──────────────────────────────────────────
+  
   const { data: importsData } = useQuery({
     queryKey: ["cbam-imports", currentPage, categoryFilter, statusFilter],
     queryFn: async () => {
@@ -143,7 +143,7 @@ export default function CBAMManager() {
       queryClient.invalidateQueries({ queryKey: ["cbam-imports"] }); 
       setShowForm(false); 
       resetForm(); 
-      setCurrentPage(1); // Reset to first page
+      setCurrentPage(1); 
       toast("Import saved successfully", "success"); 
     },
     onError: (err) => toast(`Failed to save: ${err.message}`, "error"),
@@ -170,7 +170,7 @@ export default function CBAMManager() {
   useEffect(() => {
     if (currentEtsPrice?.price && !editing && form.carbon_price_eur === "") {
       const price = String(currentEtsPrice.price);
-      // Auto-recalculate if we already have embedded emissions
+      
       const cbam = calcCbamCharge(form.embedded_emissions, price);
       setForm(f => ({ 
         ...f, 
@@ -180,7 +180,7 @@ export default function CBAMManager() {
     }
   }, [currentEtsPrice, editing]);
 
-  // ─── Auto-calc helpers ───────────────────────────────────────────
+  
   const calcEmbedded = (qty, ef) => {
     const q = parseFloat(qty) || 0;
     const e = parseFloat(ef) || 0;
@@ -192,10 +192,10 @@ export default function CBAMManager() {
     return em > 0 && p > 0 ? parseFloat((em * p).toFixed(2)) : "";
   };
 
-  // ─── Change handlers ─────────────────────────────────────────────
+  
   const handleCategoryChange = (val) => {
     const updates = { category: val };
-    // If category narrows and current hscn forms mismatch, clear it
+    
     if (form.hscn_code && val && taxonomy[val] && !taxonomy[val][form.hscn_code]) {
       updates.hscn_code = "";
       updates.emission_factor = "";
@@ -291,12 +291,12 @@ export default function CBAMManager() {
     setShowForm(true);
   };
 
-  // ─── Filtering ────────────────────────────────────────────────────
-  // Note: Filtering now happens on backend via query params
+  
+  
   const totalEmissions = imports.reduce((s, i) => s + (i.embedded_emissions || 0), 0);
   const totalCharge = imports.reduce((s, i) => s + (i.cbam_charge_eur || 0), 0);
 
-  // Computed display values for form
+  
   const displayEmbedded = parseFloat(form.embedded_emissions) || 0;
   const displayCharge = parseFloat(form.cbam_charge_eur) || 0;
 
@@ -306,8 +306,8 @@ export default function CBAMManager() {
     <div className="h-screen flex flex-col">
       <div className="flex-1 overflow-auto">
         <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
-          <ToastContainer toasts={toasts} onRemove={removeToast} />
-      {/* Header */}
+
+      
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -326,7 +326,7 @@ export default function CBAMManager() {
         </button>
       </div>
 
-      {/* Factor loading notice */}
+      
       {isLoadingFactors && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-xs text-amber-700">
           Loading CBAM emission factors from database…
@@ -338,7 +338,7 @@ export default function CBAMManager() {
         </div>
       )}
 
-      {/* ─── Form ──────────────────────────────────────────────────── */}
+      
       {showForm && (
         <div className="bg-white border rounded-lg p-6 shadow-sm">
           <h3 className="text-lg font-bold text-foreground mb-6">{editing ? "Edit CBAM Import" : "Log CBAM Import"}</h3>
@@ -346,7 +346,7 @@ export default function CBAMManager() {
           <form onSubmit={handleSave} className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               
-              {/* Left Column Fields */}
+              
               <div className="space-y-6">
                 <div>
                   <label className="text-sm font-semibold text-foreground">Product Name *</label>
@@ -402,7 +402,7 @@ export default function CBAMManager() {
                 </div>
               </div>
               
-              {/* Right Column Fields */}
+              
               <div className="space-y-6">
                 <div>
                   <label className="text-sm font-semibold text-foreground">Category *</label>
@@ -454,7 +454,7 @@ export default function CBAMManager() {
               </div>
             </div>
 
-            {/* Notes Field Full Width */}
+            
             <div>
               <label className="text-sm font-semibold text-foreground">Notes</label>
               <textarea
@@ -465,7 +465,7 @@ export default function CBAMManager() {
                 placeholder="" />
             </div>
 
-            {/* LIVE CALCULATION Bottom Bar */}
+            
             <div className="bg-emerald-50/50 rounded-lg p-5 mt-4">
               <p className="text-xs font-bold text-emerald-800 tracking-wider mb-4 uppercase">LIVE CALCULATION</p>
               <div className="grid grid-cols-3 divide-x divide-emerald-200">
@@ -499,7 +499,7 @@ export default function CBAMManager() {
               </div>
             </div>
 
-            {/* Form Actions */}
+            
             <div className="flex justify-end gap-3 pt-6 border-t mt-6">
               <button
                 type="button"
@@ -522,7 +522,7 @@ export default function CBAMManager() {
         </div>
       )}
 
-      {/* ─── KPI Cards ──────────────────────────────────────────────── */}
+      
       {!showForm && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-card border border-border rounded-lg p-4">
@@ -540,7 +540,7 @@ export default function CBAMManager() {
         </div>
       )}
 
-      {/* ─── Filters & Table ──────────────────────────────────────────────── */}
+      
       {!showForm && (
         <>
           <div className="flex items-center gap-3 flex-wrap">

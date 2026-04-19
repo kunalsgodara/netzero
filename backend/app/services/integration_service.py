@@ -12,7 +12,7 @@ settings = get_settings()
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "llama-3.1-8b-instant"
 
-# Persistent client — reuses TCP/TLS connection across requests (avoids ~300ms handshake per call)
+
 _http_client: httpx.AsyncClient | None = None
 
 
@@ -46,9 +46,9 @@ async def invoke_llm(prompt: str, response_json_schema: dict = None):
         "max_tokens": 2048,
     }
 
-    # Note: do NOT use response_format json_object — llama-3.1-8b-instant returns
-    # HTTP 400 "Failed to generate JSON" for complex schemas. The system prompt
-    # already instructs the model to return only valid JSON.
+    
+    
+    
 
     try:
         client = _get_http_client()
@@ -75,7 +75,7 @@ async def invoke_llm(prompt: str, response_json_schema: dict = None):
         data = resp.json()
         text = data["choices"][0]["message"]["content"].strip()
 
-        # Strip markdown code fences if model adds them anyway
+        
         if text.startswith("```"):
             lines = text.split("\n")
             lines = lines[1:] if lines[0].startswith("```") else lines

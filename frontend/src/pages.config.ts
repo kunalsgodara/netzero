@@ -1,5 +1,5 @@
 import AIInsights from './pages/AIInsights';
-import CBAMManager from './pages/CBAMManager';
+import ImportsListPage from './pages/ImportsListPage';
 import Dashboard from './pages/Dashboard';
 import Emissions from './pages/Emissions';
 import Onboarding from './pages/Onboarding';
@@ -8,7 +8,7 @@ import Layout from './components/layout/Layout';
 
 export const PAGES: Record<string, React.ComponentType> = {
   AIInsights,
-  CBAMManager,
+  CBAMManager: ImportsListPage,
   Dashboard,
   Emissions,
   Onboarding,

@@ -43,11 +43,13 @@ async def list_emission_activities(
     order_by: str = "-created_date",
     scope: str = None,
     category: str = None,
+    month: int = Query(None, ge=1, le=12),
+    year: int = Query(None, ge=1900),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """List emission activities with pagination. Returns newest first by default."""
-    activities, total = await list_activities(current_user.id, order_by, page, page_size, scope, category, db)
+    activities, total = await list_activities(current_user.id, order_by, page, page_size, scope, category, month, year, db)
     total_pages = (total + page_size - 1) // page_size
     
     return {

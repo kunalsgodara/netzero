@@ -4,7 +4,15 @@ from app.schemas.emission import (
     EmissionActivityCreate, EmissionActivityUpdate, EmissionActivityResponse,
     EmissionFactorResponse,
 )
-from app.schemas.cbam import CBAMImportCreate, CBAMImportUpdate, CBAMImportResponse
+from app.schemas.uk_cbam import (
+    OrganisationResponse,
+    UKCBAMProductResponse, UKETSPriceResponse, UKETSPriceCurrentResponse,
+    SupplierCreate, SupplierUpdate, SupplierResponse,
+    ImportCreate, ImportUpdate, ImportResponse,
+    AuditLogResponse,
+    CBAMReportCreate, CBAMReportResponse,
+    ThresholdStatusResponse,
+)
 from app.schemas.report import (
     ReportCreate, ReportUpdate, ReportResponse,
     ReportGenerateRequest, ReportAggregationResponse,
